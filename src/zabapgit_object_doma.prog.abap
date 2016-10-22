@@ -8,7 +8,7 @@
 *
 *----------------------------------------------------------------------*
 CLASS lcl_object_doma DEFINITION INHERITING FROM lcl_objects_super FINAL.
-
+"todo translate
   PUBLIC SECTION.
     INTERFACES lif_object.
     ALIASES mo_files FOR lif_object~mo_files.
