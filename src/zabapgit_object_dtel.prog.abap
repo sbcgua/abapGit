@@ -99,29 +99,47 @@ CLASS lcl_object_dtel IMPLEMENTATION.
 
   METHOD lif_object~serialize.
 
-    DATA: lv_name  TYPE ddobjname,
-          ls_dd04v TYPE dd04v,
-          ls_tpara TYPE tpara.
-
+    DATA: lv_name        TYPE ddobjname,
+          lv_langu       TYPE langu,
+          ls_dd04v       TYPE dd04v,
+          ls_tpara       TYPE tpara,
+          lt_dd04v       TYPE TABLE OF dd04v,
+          lt_dd04t       TYPE TABLE OF dd04t,
+          lt_dd04v_langu TYPE TABLE OF langu.
 
     lv_name = ms_item-obj_name.
 
-    CALL FUNCTION 'DDIF_DTEL_GET'
-      EXPORTING
-        name          = lv_name
-        langu         = mv_language
-      IMPORTING
-        dd04v_wa      = ls_dd04v
-        tpara_wa      = ls_tpara
-      EXCEPTIONS
-        illegal_input = 1
-        OTHERS        = 2.
-    IF sy-subrc <> 0.
-      lcx_exception=>raise( 'Error from DDIF_DTEL_GET' ).
-    ENDIF.
-    IF ls_dd04v IS INITIAL.
+    SELECT DISTINCT ddlanguage as langu INTO TABLE lt_dd04v_langu
+      FROM dd04v
+     WHERE rollname = lv_name.
+
+    LOOP AT lt_dd04v_langu INTO lv_langu.
+      CLEAR ls_dd04v.
+      CALL FUNCTION 'DDIF_DTEL_GET'
+        EXPORTING
+          name          = lv_name
+          langu         = lv_langu
+        IMPORTING
+          dd04v_wa      = ls_dd04v
+          tpara_wa      = ls_tpara
+        EXCEPTIONS
+          illegal_input = 1
+          OTHERS        = 2.
+      IF sy-subrc <> 0.
+        lcx_exception=>raise( 'Error from DDIF_DTEL_GET' ).
+      ENDIF.
+      APPEND ls_dd04v TO lt_dd04v.
+    ENDLOOP.
+    IF lines( lt_dd04v ) IS INITIAL.
       RETURN. " does not exist
     ENDIF.
+
+    CALL FUNCTION 'DD_DTEL_GET'
+      EXPORTING
+        langu       = '*' "All lanuguages
+        roll_name   = lv_name
+      TABLES
+        dd04t_tab_a = lt_dd04t.
 
     CLEAR: ls_dd04v-as4user,
            ls_dd04v-as4date,
@@ -139,44 +157,71 @@ CLASS lcl_object_dtel IMPLEMENTATION.
              ls_dd04v-entitytab.
     ENDIF.
 
-    io_xml->add( iv_name = 'DD04V'
-                 ig_data = ls_dd04v ).
-    io_xml->add( iv_name = 'TPARA'
-                 ig_data = ls_tpara ).
+    io_xml->add( iv_name = 'DD04V_TAB'
+                 ig_data = lt_dd04v ).
+
+    io_xml->add( iv_name = 'DD04T_TAB'
+                 ig_data = lt_dd04t ).
 
   ENDMETHOD.                    "serialize
 
   METHOD lif_object~deserialize.
 
-    DATA: ls_dd04v TYPE dd04v,
-          lv_name  TYPE ddobjname,
-          ls_tpara TYPE tpara.
+    DATA: ls_dd04v      TYPE dd04v,
+          lv_name       TYPE ddobjname,
+          lv_inst_langu TYPE char40,
+          ls_tpara      TYPE tpara,
+          ls_dd04l      TYPE dd04l,
+          lt_dd04v      TYPE TABLE OF dd04v,
+          lt_dd04t      TYPE TABLE OF dd04t.
 
 
-    io_xml->read( EXPORTING iv_name = 'DD04V'
-                  CHANGING cg_data = ls_dd04v ).
-    io_xml->read( EXPORTING iv_name = 'TPARA'
-                  CHANGING cg_data = ls_tpara ).
+    io_xml->read( EXPORTING iv_name = 'DD04V_TAB'
+                  CHANGING cg_data = lt_dd04v ).
+
+    io_xml->read( EXPORTING iv_name = 'DD04T_TAB'
+                  CHANGING cg_data = lt_dd04t ).
 
     corr_insert( iv_package ).
 
+    "import only installed languages - TODO: move to lcl_git_utils?
+     CALL FUNCTION 'RSAQ_READ_INSTALLED_LANGUAGES'
+       IMPORTING
+         inst_languages = lv_inst_langu.
+
     lv_name = ms_item-obj_name. " type conversion
-
-    CALL FUNCTION 'DDIF_DTEL_PUT'
+    LOOP AT lt_dd04v INTO ls_dd04v where ddlanguage CA lv_inst_langu.
+      CALL FUNCTION 'DDIF_DTEL_PUT'
+        EXPORTING
+          name              = lv_name
+          dd04v_wa          = ls_dd04v
+        EXCEPTIONS
+          dtel_not_found    = 1
+          name_inconsistent = 2
+          dtel_inconsistent = 3
+          put_failure       = 4
+          put_refused       = 5
+          OTHERS            = 6.
+      IF sy-subrc <> 0.
+        lcx_exception=>raise( 'error from DDIF_DTEL_PUT' ).
+      ENDIF.
+    ENDLOOP.
+    MOVE-CORRESPONDING ls_dd04v TO ls_dd04l.
+    DELETE lt_dd04t where ddlanguage NA lv_inst_langu.
+    CALL FUNCTION 'DD_DTEL_PUT'
       EXPORTING
-        name              = lv_name
-        dd04v_wa          = ls_dd04v
+        dd04l_wa            = ls_dd04l
+        rollname            = lv_name
+      TABLES
+        dd04t_tab           = lt_dd04t
       EXCEPTIONS
-        dtel_not_found    = 1
-        name_inconsistent = 2
-        dtel_inconsistent = 3
-        put_failure       = 4
-        put_refused       = 5
-        OTHERS            = 6.
+        illegal_value       = 1
+        object_inconsistent = 2
+        db_access_failure   = 3
+        others              = 4.
     IF sy-subrc <> 0.
-      lcx_exception=>raise( 'error from DDIF_DTEL_PUT' ).
+      lcx_exception=>raise( 'error from DD_DTEL_PUT' ).
     ENDIF.
-
     lcl_objects_activation=>add_item( ms_item ).
 
   ENDMETHOD.                    "deserialize
