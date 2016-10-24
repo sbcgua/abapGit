@@ -100,73 +100,69 @@ CLASS lcl_object_doma IMPLEMENTATION.
 
   METHOD lif_object~serialize.
 
-    DATA: lv_name        TYPE ddobjname,
-          lv_rc          TYPE sy-subrc,
-          lv_langu       TYPE langu,
-          ls_dd01v       TYPE dd01v,
-          lt_dd01v       TYPE TABLE OF dd01v,
-          lt_dd07v       TYPE TABLE OF dd07v,
-          lt_dd01v_langu TYPE TABLE OF langu,
-          lt_dd07v_langu TYPE TABLE OF langu.
+    DATA: lv_name         TYPE ddobjname,
+          lv_langu        TYPE langu,
+          ls_dd01v        TYPE dd01v,
+          ls_dd01v_mlangu TYPE dd01v,
+          ls_dd01v_text   TYPE dd01v,
+          lt_dd01v_texts  TYPE TABLE OF dd01v,
+          lt_dd07v        TYPE TABLE OF dd07v,
+          lt_dd07v_texts  TYPE TABLE OF dd07v,
+          lt_dd07v_mlangu TYPE TABLE OF dd07v,
+          lt_i18n_langs   TYPE TABLE OF langu.
 
     lv_name = ms_item-obj_name.
 
-    SELECT DISTINCT ddlanguage as langu INTO TABLE lt_dd01v_langu
+    SELECT DISTINCT ddlanguage as langu INTO TABLE lt_i18n_langs
       FROM dd01v
      WHERE domname = lv_name.
 
-    LOOP AT lt_dd01v_langu INTO lv_langu.
-      CLEAR ls_dd01v.
+    LOOP AT lt_i18n_langs INTO lv_langu.
+      CLEAR ls_dd01v_text.
+      refresh lt_dd07v.
       CALL FUNCTION 'DDIF_DOMA_GET'
         EXPORTING
           name          = lv_name
           langu         = lv_langu
         IMPORTING
           dd01v_wa      = ls_dd01v
+        TABLES
+          dd07v_tab     = lt_dd07v
         EXCEPTIONS
           illegal_input = 1
           OTHERS        = 2.
-      IF sy-subrc <> 0.
-        lcx_exception=>raise( 'error from DDIF_DOMA_GET' ).
+      CHECK ls_dd01v-ddlanguage IS NOT INITIAL.     "text doesn't exist
+      DELETE lt_dd07v WHERE ddlanguage IS INITIAL.  "text doesn't exist
+      CLEAR: ls_dd01v-as4user,
+             ls_dd01v-as4date,
+             ls_dd01v-as4time.
+      IF lv_langu EQ mv_language.
+        ls_dd01v_mlangu = ls_dd01v.
+        APPEND LINES OF lt_dd07v TO lt_dd07v_mlangu.
+      ELSE.
+        APPEND ls_dd01v TO lt_dd01v_texts.
+        APPEND LINES OF lt_dd07v TO lt_dd07v_texts.
       ENDIF.
-      APPEND ls_dd01v TO lt_dd01v.
     ENDLOOP.
-    IF lines( lt_dd01v ) IS INITIAL.
+    IF ls_dd01v_mlangu IS INITIAL.
       RETURN. " does not exist
     ENDIF.
 
-    SELECT DISTINCT ddlanguage as langu INTO TABLE lt_dd07v_langu
-      FROM dd07v
-     WHERE domname = lv_name.
-
-    CALL FUNCTION 'DD_DOMVALUES_GET'
-      EXPORTING
-        domname        = lv_name
-        text           = 'T'  "texts only
-        langu          = '*'  "all languages
-      IMPORTING
-        rc             = lv_rc
-      TABLES
-        dd07v_tab      = lt_dd07v
-      EXCEPTIONS
-        wrong_textflag = 1
-        OTHERS         = 2.
-    IF sy-subrc <> 0.
-      lcx_exception=>raise( 'error from DD_DOMVALUES_GET' ).
-    ENDIF.
-
-    CLEAR: ls_dd01v-as4user,
-           ls_dd01v-as4date,
-           ls_dd01v-as4time.
-
-    io_xml->add( iv_name = 'DD01V_TAB'
-                 ig_data = lt_dd01v ).
-
-    io_xml->add( iv_name = 'DD07V_LANGU'
-                 ig_data = lt_dd07v_langu ).
+    io_xml->add( iv_name = 'DD01V'
+                 ig_data = ls_dd01v_mlangu ).
 
     io_xml->add( iv_name = 'DD07V_TAB'
-                 ig_data = lt_dd07v ).
+                 ig_data = lt_dd07v_mlangu ).
+
+    check lines( lt_i18n_langs ) > 1.
+    io_xml->add( iv_name = 'I18N_LANGS'
+                 ig_data = lt_i18n_langs ).
+
+    io_xml->add( iv_name = 'DD01V_TEXTS'
+                 ig_data = lt_dd01v_texts ).
+
+    io_xml->add( iv_name = 'DD07V_TEXTS'
+                 ig_data = lt_dd07v_texts ).
 
   ENDMETHOD.                    "serialize
 
@@ -179,34 +175,62 @@ CLASS lcl_object_doma IMPLEMENTATION.
 * fm RS_CORR_INSERT ?
     DATA: lv_name         TYPE ddobjname,
           lv_langu        TYPE langu,
-          lv_inst_langu   TYPE char40,
           ls_dd01v        TYPE dd01v,
-          lt_dd01v        TYPE TABLE OF dd01v,
+          ls_dd01v_text   TYPE dd01v,
           lt_dd07v        TYPE TABLE OF dd07v,
-          lt_dd07v_langu  TYPE TABLE OF langu,
-          lt_dd07v_tmp    TYPE TABLE OF dd07v.
+          lt_dd07v_tmp    TYPE TABLE OF dd07v,
+          lt_dd01v_texts  TYPE TABLE OF dd01v,
+          lt_dd07v_texts  TYPE TABLE OF dd07v,
+          lt_i18n_langs   TYPE TABLE OF langu.
 
-    io_xml->read( EXPORTING iv_name = 'DD01V_TAB'
-                  CHANGING cg_data = lt_dd01v ).
-
-    io_xml->read( EXPORTING iv_name = 'DD07V_LANGU'
-                  CHANGING cg_data = lt_dd07v_langu ).
+    io_xml->read( EXPORTING iv_name = 'DD01V'
+                  CHANGING  cg_data = ls_dd01v ).
 
     io_xml->read( EXPORTING iv_name = 'DD07V_TAB'
-                  CHANGING cg_data = lt_dd07v ).
+                  CHANGING  cg_data = lt_dd07v ).
+
+    io_xml->read( EXPORTING iv_name = 'I18N_LANGS'
+                  CHANGING  cg_data = lt_i18n_langs ).
+
+    io_xml->read( EXPORTING iv_name = 'DD01V_TEXTS'
+                  CHANGING  cg_data = lt_dd01v_texts ).
+
+    io_xml->read( EXPORTING iv_name = 'DD07V_TEXTS'
+                  CHANGING  cg_data = lt_dd07v_texts ).
 
     corr_insert( iv_package ).
-    "import only installed languages - TODO: move to lcl_git_utils?
-     CALL FUNCTION 'RSAQ_READ_INSTALLED_LANGUAGES'
-       IMPORTING
-         inst_languages = lv_inst_langu.
 
     lv_name = ms_item-obj_name. " type conversion
-    LOOP AT lt_dd01v INTO ls_dd01v where ddlanguage CA lv_inst_langu.
+
+    CALL FUNCTION 'DDIF_DOMA_PUT'   "Master language
+      EXPORTING
+        name              = lv_name
+        dd01v_wa          = ls_dd01v
+      TABLES
+        dd07v_tab         = lt_dd07v
+      EXCEPTIONS
+        doma_not_found    = 1
+        name_inconsistent = 2
+        doma_inconsistent = 3
+        put_failure       = 4
+        put_refused       = 5
+        OTHERS            = 6.
+    IF sy-subrc <> 0.
+      lcx_exception=>raise( 'error from DDIF_DOMA_PUT' ).
+    ENDIF.
+
+    LOOP AT lt_i18n_langs INTO lv_langu.
+      CHECK lcl_objects=>is_langu_installed( lv_langu ) IS NOT INITIAL.
+      READ TABLE lt_dd01v_texts INTO ls_dd01v_text WITH KEY ddlanguage = lv_langu.
+      CHECK sy-subrc IS INITIAL.
+      lt_dd07v_tmp = lt_dd07v_texts.
+      DELETE lt_dd07v_tmp WHERE ddlanguage NE lv_langu.
       CALL FUNCTION 'DDIF_DOMA_PUT'
         EXPORTING
           name              = lv_name
-          dd01v_wa          = ls_dd01v
+          dd01v_wa          = ls_dd01v_text
+        TABLES
+          dd07v_tab         = lt_dd07v_tmp
         EXCEPTIONS
           doma_not_found    = 1
           name_inconsistent = 2
@@ -216,21 +240,6 @@ CLASS lcl_object_doma IMPLEMENTATION.
           OTHERS            = 6.
       IF sy-subrc <> 0.
         lcx_exception=>raise( 'error from DDIF_DOMA_PUT' ).
-      ENDIF.
-    ENDLOOP.
-
-    LOOP AT lt_dd07v_langu INTO lv_langu  where table_line ca lv_inst_langu.
-      lt_dd07v_tmp = lt_dd07v.
-      DELETE lt_dd07v_tmp WHERE ddlanguage NE lv_langu.
-      CALL FUNCTION 'DD_DOFV_PUT'
-        EXPORTING
-          domain_name = lv_name
-        TABLES
-           dd07v_tab  = lt_dd07v_tmp
-        EXCEPTIONS
-           OTHERS     = 01.
-      IF sy-subrc <> 0.
-        lcx_exception=>raise( 'error from DD_DOFV_PUT' ).
       ENDIF.
     ENDLOOP.
 

@@ -221,6 +221,17 @@ CLASS lcl_objects IMPLEMENTATION.
 
   ENDMETHOD.                    "supported_list
 
+  METHOD is_langu_installed.
+   IF av_langs_installed IS INITIAL.
+     CALL FUNCTION 'RSAQ_READ_INSTALLED_LANGUAGES'
+       IMPORTING
+         inst_languages = av_langs_installed.
+    ENDIF.
+    IF av_langs_installed CA iv_langu.
+      rv_bool = abap_true.
+    ENDIF.
+  ENDMETHOD.
+
   METHOD exists.
 
     DATA: li_obj TYPE REF TO lif_object.

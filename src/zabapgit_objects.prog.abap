@@ -1517,7 +1517,12 @@ CLASS lcl_objects DEFINITION FINAL.
     CLASS-METHODS supported_list
       RETURNING VALUE(rt_types) TYPE ty_types_tt.
 
+    CLASS-METHODS is_langu_installed
+      IMPORTING iv_langu       TYPE langu
+      RETURNING VALUE(rv_bool) TYPE abap_bool.
+
   PRIVATE SECTION.
+    CLASS-DATA: av_langs_installed type scplangs.
     CLASS-METHODS check_duplicates
       IMPORTING it_files TYPE ty_files_tt
       RAISING   lcx_exception.
