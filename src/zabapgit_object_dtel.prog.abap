@@ -198,7 +198,9 @@ CLASS lcl_object_dtel IMPLEMENTATION.
     ENDIF.
 
     LOOP AT lt_dd04v_texts INTO ls_dd04v.
-      CHECK lcl_objects=>is_langu_installed( ls_dd04v-ddlanguage ) IS NOT INITIAL.
+
+      CHECK lcl_objects=>is_language_installed( ls_dd04v-ddlanguage ) = abap_true.
+
       CALL FUNCTION 'DDIF_DTEL_PUT'
         EXPORTING
           name              = lv_name

@@ -8,10 +8,38 @@
 *
 *----------------------------------------------------------------------*
 CLASS lcl_object_doma DEFINITION INHERITING FROM lcl_objects_super FINAL.
-"todo translate
+
   PUBLIC SECTION.
     INTERFACES lif_object.
     ALIASES mo_files FOR lif_object~mo_files.
+
+  PRIVATE SECTION.
+
+    TYPES: BEGIN OF ty_dd01_texts,
+             ddlanguage TYPE dd01v-ddlanguage,
+             ddtext     TYPE dd01v-ddtext,
+           END OF ty_dd01_texts,
+           BEGIN OF ty_dd07_texts,
+             valpos     TYPE dd07v-valpos,
+             ddlanguage TYPE dd07v-ddlanguage,
+             domvalue_l TYPE dd07v-domvalue_l,
+             domvalue_h TYPE dd07v-domvalue_h,
+             ddtext     TYPE dd07v-ddtext,
+             domval_ld  TYPE dd07v-domval_ld,
+             domval_hd  TYPE dd07v-domval_hd,
+           END OF ty_dd07_texts,
+           tt_dd01_texts TYPE STANDARD TABLE OF ty_dd01_texts,
+           tt_dd07_texts TYPE STANDARD TABLE OF ty_dd07_texts.
+
+    METHODS:
+      serialize_texts
+        IMPORTING io_xml TYPE REF TO lcl_xml_output
+        RAISING   lcx_exception,
+      deserialize_texts
+        IMPORTING io_xml   TYPE REF TO lcl_xml_input
+                  is_dd01v TYPE dd01v
+                  it_dd07v TYPE dd07v_tab
+        RAISING   lcx_exception.
 
 ENDCLASS.                    "lcl_object_doma DEFINITION
 
@@ -100,69 +128,38 @@ CLASS lcl_object_doma IMPLEMENTATION.
 
   METHOD lif_object~serialize.
 
-    DATA: lv_name         TYPE ddobjname,
-          lv_langu        TYPE langu,
-          ls_dd01v        TYPE dd01v,
-          ls_dd01v_mlangu TYPE dd01v,
-          ls_dd01v_text   TYPE dd01v,
-          lt_dd01v_texts  TYPE TABLE OF dd01v,
-          lt_dd07v        TYPE TABLE OF dd07v,
-          lt_dd07v_texts  TYPE TABLE OF dd07v,
-          lt_dd07v_mlangu TYPE TABLE OF dd07v,
-          lt_i18n_langs   TYPE TABLE OF langu.
+    DATA: lv_name  TYPE ddobjname,
+          ls_dd01v TYPE dd01v,
+          lt_dd07v TYPE TABLE OF dd07v.
+
 
     lv_name = ms_item-obj_name.
 
-    SELECT DISTINCT ddlanguage as langu INTO TABLE lt_i18n_langs
-      FROM dd01v
-     WHERE domname = lv_name.
-
-    LOOP AT lt_i18n_langs INTO lv_langu.
-      CLEAR ls_dd01v_text.
-      refresh lt_dd07v.
-      CALL FUNCTION 'DDIF_DOMA_GET'
-        EXPORTING
-          name          = lv_name
-          langu         = lv_langu
-        IMPORTING
-          dd01v_wa      = ls_dd01v
-        TABLES
-          dd07v_tab     = lt_dd07v
-        EXCEPTIONS
-          illegal_input = 1
-          OTHERS        = 2.
-      CHECK ls_dd01v-ddlanguage IS NOT INITIAL.     "text doesn't exist
-      DELETE lt_dd07v WHERE ddlanguage IS INITIAL.  "text doesn't exist
-      CLEAR: ls_dd01v-as4user,
-             ls_dd01v-as4date,
-             ls_dd01v-as4time.
-      IF lv_langu EQ mv_language.
-        ls_dd01v_mlangu = ls_dd01v.
-        APPEND LINES OF lt_dd07v TO lt_dd07v_mlangu.
-      ELSE.
-        APPEND ls_dd01v TO lt_dd01v_texts.
-        APPEND LINES OF lt_dd07v TO lt_dd07v_texts.
-      ENDIF.
-    ENDLOOP.
-    IF ls_dd01v_mlangu IS INITIAL.
-      RETURN. " does not exist
+    CALL FUNCTION 'DDIF_DOMA_GET'
+      EXPORTING
+        name          = lv_name
+        langu         = mv_language
+      IMPORTING
+        dd01v_wa      = ls_dd01v
+      TABLES
+        dd07v_tab     = lt_dd07v
+      EXCEPTIONS
+        illegal_input = 1
+        OTHERS        = 2.
+    IF sy-subrc <> 0 OR ls_dd01v IS INITIAL.
+      lcx_exception=>raise( 'error from DDIF_DOMA_GET' ).
     ENDIF.
 
+    CLEAR: ls_dd01v-as4user,
+           ls_dd01v-as4date,
+           ls_dd01v-as4time.
+
     io_xml->add( iv_name = 'DD01V'
-                 ig_data = ls_dd01v_mlangu ).
-
+                 ig_data = ls_dd01v ).
     io_xml->add( iv_name = 'DD07V_TAB'
-                 ig_data = lt_dd07v_mlangu ).
+                 ig_data = lt_dd07v ).
 
-    check lines( lt_i18n_langs ) > 1.
-    io_xml->add( iv_name = 'I18N_LANGS'
-                 ig_data = lt_i18n_langs ).
-
-    io_xml->add( iv_name = 'DD01V_TEXTS'
-                 ig_data = lt_dd01v_texts ).
-
-    io_xml->add( iv_name = 'DD07V_TEXTS'
-                 ig_data = lt_dd07v_texts ).
+    serialize_texts( io_xml ).
 
   ENDMETHOD.                    "serialize
 
@@ -173,36 +170,22 @@ CLASS lcl_object_doma IMPLEMENTATION.
 
 * fm TR_TADIR_INTERFACE
 * fm RS_CORR_INSERT ?
-    DATA: lv_name         TYPE ddobjname,
-          lv_langu        TYPE langu,
-          ls_dd01v        TYPE dd01v,
-          ls_dd01v_text   TYPE dd01v,
-          lt_dd07v        TYPE TABLE OF dd07v,
-          lt_dd07v_tmp    TYPE TABLE OF dd07v,
-          lt_dd01v_texts  TYPE TABLE OF dd01v,
-          lt_dd07v_texts  TYPE TABLE OF dd07v,
-          lt_i18n_langs   TYPE TABLE OF langu.
+
+    DATA: lv_name  TYPE ddobjname,
+          ls_dd01v TYPE dd01v,
+          lt_dd07v TYPE TABLE OF dd07v.
+
 
     io_xml->read( EXPORTING iv_name = 'DD01V'
-                  CHANGING  cg_data = ls_dd01v ).
-
+                  CHANGING cg_data = ls_dd01v ).
     io_xml->read( EXPORTING iv_name = 'DD07V_TAB'
-                  CHANGING  cg_data = lt_dd07v ).
-
-    io_xml->read( EXPORTING iv_name = 'I18N_LANGS'
-                  CHANGING  cg_data = lt_i18n_langs ).
-
-    io_xml->read( EXPORTING iv_name = 'DD01V_TEXTS'
-                  CHANGING  cg_data = lt_dd01v_texts ).
-
-    io_xml->read( EXPORTING iv_name = 'DD07V_TEXTS'
-                  CHANGING  cg_data = lt_dd07v_texts ).
+                  CHANGING cg_data = lt_dd07v ).
 
     corr_insert( iv_package ).
 
     lv_name = ms_item-obj_name. " type conversion
 
-    CALL FUNCTION 'DDIF_DOMA_PUT'   "Master language
+    CALL FUNCTION 'DDIF_DOMA_PUT'
       EXPORTING
         name              = lv_name
         dd01v_wa          = ls_dd01v
@@ -219,16 +202,133 @@ CLASS lcl_object_doma IMPLEMENTATION.
       lcx_exception=>raise( 'error from DDIF_DOMA_PUT' ).
     ENDIF.
 
-    LOOP AT lt_i18n_langs INTO lv_langu.
-      CHECK lcl_objects=>is_langu_installed( lv_langu ) IS NOT INITIAL.
-      READ TABLE lt_dd01v_texts INTO ls_dd01v_text WITH KEY ddlanguage = lv_langu.
-      CHECK sy-subrc IS INITIAL.
-      lt_dd07v_tmp = lt_dd07v_texts.
-      DELETE lt_dd07v_tmp WHERE ddlanguage NE lv_langu.
+    deserialize_texts( io_xml   = io_xml
+                       is_dd01v = ls_dd01v
+                       it_dd07v = lt_dd07v ).
+
+    lcl_objects_activation=>add_item( ms_item ).
+
+  ENDMETHOD.                    "deserialize
+
+  METHOD serialize_texts.
+
+    DATA: lv_name         TYPE ddobjname,
+          lv_index        TYPE i,
+          ls_dd01v        TYPE dd01v,
+          lt_dd07v        TYPE TABLE OF dd07v,
+          lt_i18n_langs   TYPE TABLE OF langu,
+          lt_dd01_texts   TYPE tt_dd01_texts,
+          lt_dd07_texts   TYPE tt_dd07_texts.
+
+    FIELD-SYMBOLS: <lang>      LIKE LINE OF lt_i18n_langs,
+                   <dd07v>     LIKE LINE OF lt_dd07v,
+                   <dd01_text> LIKE LINE OF lt_dd01_texts,
+                   <dd07_text> LIKE LINE OF lt_dd07_texts.
+
+    lv_name = ms_item-obj_name.
+
+    " Collect additional languages
+    SELECT DISTINCT ddlanguage as langu INTO TABLE lt_i18n_langs
+      FROM dd01v
+      WHERE domname = lv_name
+      AND   ddlanguage <> mv_language. " Skip master lang - it was serialized already
+
+    LOOP AT lt_i18n_langs ASSIGNING <lang>.
+      lv_index = sy-tabix.
+
+      CALL FUNCTION 'DDIF_DOMA_GET'
+        EXPORTING
+          name          = lv_name
+          langu         = <lang>
+        IMPORTING
+          dd01v_wa      = ls_dd01v
+        TABLES
+          dd07v_tab     = lt_dd07v
+        EXCEPTIONS
+          illegal_input = 1
+          OTHERS        = 2.
+      IF sy-subrc <> 0 OR ls_dd01v-ddlanguage IS INITIAL.
+        DELETE lt_i18n_langs INDEX lv_index. " Don't save this lang
+        CONTINUE.
+      ENDIF.
+
+      APPEND INITIAL LINE TO lt_dd01_texts ASSIGNING <dd01_text>.
+      MOVE-CORRESPONDING ls_dd01v TO <dd01_text>.
+
+      LOOP AT lt_dd07v ASSIGNING <dd07v>.
+        APPEND INITIAL LINE TO lt_dd07_texts ASSIGNING <dd07_text>.
+        MOVE-CORRESPONDING <dd07v> TO <dd07_text>.
+      ENDLOOP.
+
+    ENDLOOP.
+
+    IF lines( lt_i18n_langs ) > 1.
+      io_xml->add( iv_name = 'I18N_LANGS'
+                   ig_data = lt_i18n_langs ).
+
+      io_xml->add( iv_name = 'DD01_TEXTS'
+                   ig_data = lt_dd01_texts ).
+
+      io_xml->add( iv_name = 'DD07_TEXTS'
+                   ig_data = lt_dd07_texts ).
+    ENDIF.
+
+  ENDMETHOD.  "serialize_texts
+
+  METHOD deserialize_texts.
+
+    DATA: lv_name         TYPE ddobjname,
+          ls_dd01v_tmp    TYPE dd01v,
+          lt_dd07v_tmp    TYPE TABLE OF dd07v,
+          lt_i18n_langs   TYPE TABLE OF langu,
+          lt_dd01_texts   TYPE tt_dd01_texts,
+          lt_dd07_texts   TYPE tt_dd07_texts.
+
+    FIELD-SYMBOLS: <lang>      LIKE LINE OF lt_i18n_langs,
+                   <dd07v>     LIKE LINE OF it_dd07v,
+                   <dd01_text> LIKE LINE OF lt_dd01_texts,
+                   <dd07_text> LIKE LINE OF lt_dd07_texts.
+
+    lv_name = ms_item-obj_name.
+
+    io_xml->read( EXPORTING iv_name = 'I18N_LANGS'
+                  CHANGING  cg_data = lt_i18n_langs ).
+
+    io_xml->read( EXPORTING iv_name = 'DD01_TEXTS'
+                  CHANGING  cg_data = lt_dd01_texts ).
+
+    io_xml->read( EXPORTING iv_name = 'DD07_TEXTS'
+                  CHANGING  cg_data = lt_dd07_texts ).
+
+    SORT: lt_i18n_langs, lt_dd07_texts BY ddlanguage. " Optimization
+
+    LOOP AT lt_i18n_langs ASSIGNING <lang>.
+
+      " Skip languages that are not installed
+      CHECK lcl_objects=>is_language_installed( <lang> ) = abap_true.
+
+      " Domain description
+      ls_dd01v_tmp = is_dd01v.
+      READ TABLE lt_dd01_texts ASSIGNING <dd01_text> WITH KEY ddlanguage = <lang>.
+      IF sy-subrc > 0.
+        lcx_exception=>raise( |DD01_TEXTS cannot find lang { <lang> } in XML| ).
+      ENDIF.
+      MOVE-CORRESPONDING <dd01_text> TO ls_dd01v_tmp.
+
+      " Domain values
+      lt_dd07v_tmp = it_dd07v.
+      LOOP AT lt_dd07v_tmp ASSIGNING <dd07v>.
+        READ TABLE lt_dd07_texts ASSIGNING <dd07_text>
+          WITH KEY ddlanguage = <lang> valpos = <dd07v>-valpos.
+        CHECK sy-subrc = 0. " ! no translation -> master translation remain (maybe not OK)
+        MOVE-CORRESPONDING <dd07_text> TO <dd07v>.
+        DELETE lt_dd07_texts INDEX sy-tabix. " Optimization
+      ENDLOOP.
+
       CALL FUNCTION 'DDIF_DOMA_PUT'
         EXPORTING
           name              = lv_name
-          dd01v_wa          = ls_dd01v_text
+          dd01v_wa          = ls_dd01v_tmp
         TABLES
           dd07v_tab         = lt_dd07v_tmp
         EXCEPTIONS
@@ -239,12 +339,10 @@ CLASS lcl_object_doma IMPLEMENTATION.
           put_refused       = 5
           OTHERS            = 6.
       IF sy-subrc <> 0.
-        lcx_exception=>raise( 'error from DDIF_DOMA_PUT' ).
+        lcx_exception=>raise( 'error from DDIF_DOMA_PUT @TEXTS' ).
       ENDIF.
     ENDLOOP.
 
-    lcl_objects_activation=>add_item( ms_item ).
-
-  ENDMETHOD.                    "deserialize
+  ENDMETHOD.  "deserialize_texts
 
 ENDCLASS.                    "lcl_object_doma IMPLEMENTATION

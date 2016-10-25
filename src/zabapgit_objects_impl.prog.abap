@@ -221,16 +221,17 @@ CLASS lcl_objects IMPLEMENTATION.
 
   ENDMETHOD.                    "supported_list
 
-  METHOD is_langu_installed.
-   IF av_langs_installed IS INITIAL.
+  METHOD is_language_installed.
+
+    IF mv_langs_installed IS INITIAL.
      CALL FUNCTION 'RSAQ_READ_INSTALLED_LANGUAGES'
        IMPORTING
-         inst_languages = av_langs_installed.
+         inst_languages = mv_langs_installed.
     ENDIF.
-    IF av_langs_installed CA iv_langu.
-      rv_bool = abap_true.
-    ENDIF.
-  ENDMETHOD.
+
+    rv_yes = boolc( mv_langs_installed CA iv_language ).
+
+  ENDMETHOD.  "is_language_installed
 
   METHOD exists.
 
