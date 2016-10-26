@@ -13,6 +13,25 @@ CLASS lcl_object_dtel DEFINITION INHERITING FROM lcl_objects_super FINAL.
     INTERFACES lif_object.
     ALIASES mo_files FOR lif_object~mo_files.
 
+  PRIVATE SECTION.
+    TYPES: BEGIN OF ty_dd04_texts,
+             ddlanguage type dd04t-ddlanguage,
+             ddtext	    type dd04t-ddtext,
+             reptext    type dd04t-reptext,
+             scrtext_s  type dd04t-scrtext_s,
+             scrtext_m  type dd04t-scrtext_m,
+             scrtext_l  type dd04t-scrtext_l,
+           END OF ty_dd04_texts,
+           tt_dd04_texts TYPE STANDARD TABLE OF ty_dd04_texts.
+    METHODS:
+      serialize_texts
+        IMPORTING io_xml TYPE REF TO lcl_xml_output
+        RAISING   lcx_exception,
+      deserialize_texts
+        IMPORTING io_xml   TYPE REF TO lcl_xml_input
+                  is_dd04v TYPE dd04v
+        RAISING   lcx_exception.
+
 ENDCLASS.                    "lcl_object_dtel DEFINITION
 
 *----------------------------------------------------------------------*
@@ -98,91 +117,68 @@ CLASS lcl_object_dtel IMPLEMENTATION.
   ENDMETHOD.                    "delete
 
   METHOD lif_object~serialize.
-
-    DATA: lv_name        TYPE ddobjname,
-          lv_langu       TYPE langu,
-          ls_dd04v       TYPE dd04v,
-          ls_dd04v_mlang TYPE dd04v,
-          ls_dd04v_text  TYPE dd04v,
-          ls_tpara       TYPE tpara,
-          lt_dd04v_texts TYPE TABLE OF dd04v,
-          lt_i18n_langs  TYPE TABLE OF langu.
+    DATA: lv_name  TYPE ddobjname,
+          ls_dd04v TYPE dd04v,
+          ls_tpara TYPE tpara.
 
     lv_name = ms_item-obj_name.
 
-    SELECT DISTINCT ddlanguage as langu INTO TABLE lt_i18n_langs
-      FROM dd04v
-     WHERE rollname = lv_name.
+    CALL FUNCTION 'DDIF_DTEL_GET'
+      EXPORTING
+        name          = lv_name
+        langu         = mv_language
+      IMPORTING
+        dd04v_wa      = ls_dd04v
+        tpara_wa      = ls_tpara
+      EXCEPTIONS
+        illegal_input = 1
+        OTHERS        = 2.
+    IF sy-subrc <> 0 or ls_dd04v IS INITIAL.
+      lcx_exception=>raise( 'Error from DDIF_DTEL_GET' ).
+    ENDIF.
 
-    LOOP AT lt_i18n_langs INTO lv_langu.
-      CLEAR ls_dd04v.
-      CALL FUNCTION 'DDIF_DTEL_GET'
-        EXPORTING
-          name          = lv_name
-          langu         = lv_langu
-        IMPORTING
-          dd04v_wa      = ls_dd04v_text
-          tpara_wa      = ls_tpara
-        EXCEPTIONS
-          illegal_input = 1
-          OTHERS        = 2.
-      IF sy-subrc <> 0.
-        lcx_exception=>raise( 'Error from DDIF_DTEL_GET' ).
-      ENDIF.
-      CLEAR: ls_dd04v_text-as4user,
-             ls_dd04v_text-as4date,
-             ls_dd04v_text-as4time.
+    CLEAR: ls_dd04v-as4user,
+           ls_dd04v-as4date,
+           ls_dd04v-as4time.
 
-      IF ls_dd04v_text-refkind = 'D'.
+    IF ls_dd04v-refkind = 'D'.
 * clear values inherited from domain
-        CLEAR: ls_dd04v_text-datatype,
-               ls_dd04v_text-leng,
-               ls_dd04v_text-decimals,
-               ls_dd04v_text-outputlen,
-               ls_dd04v_text-lowercase,
-               ls_dd04v_text-signflag,
-               ls_dd04v_text-convexit,
-               ls_dd04v_text-entitytab.
-      ENDIF.
-      IF lv_langu NE mv_language.
-        APPEND ls_dd04v_text TO lt_dd04v_texts.
-      ELSE.
-        ls_dd04v_mlang = ls_dd04v_text.
-      ENDIF.
-    ENDLOOP.
-    IF ls_dd04v_mlang IS INITIAL.
-      RETURN. " does not exist
+      CLEAR: ls_dd04v-datatype,
+             ls_dd04v-leng,
+             ls_dd04v-decimals,
+             ls_dd04v-outputlen,
+             ls_dd04v-lowercase,
+             ls_dd04v-signflag,
+             ls_dd04v-convexit,
+             ls_dd04v-entitytab.
     ENDIF.
 
     io_xml->add( iv_name = 'DD04V'
-                 ig_data = ls_dd04v_mlang ).
-
+                 ig_data = ls_dd04v ).
     io_xml->add( iv_name = 'TPARA'
                  ig_data = ls_tpara ).
 
-    check lines( lt_dd04v_texts ) is not initial.
-
-    io_xml->add( iv_name = 'DD04V_TEXTS'
-                 ig_data = lt_dd04v_texts ).
+    serialize_texts( io_xml ).
 
   ENDMETHOD.                    "serialize
 
   METHOD lif_object~deserialize.
 
-    DATA: lv_name        TYPE ddobjname,
-          ls_dd04v       TYPE dd04v,
-          lt_dd04v_texts TYPE TABLE OF dd04v.
+ DATA: ls_dd04v TYPE dd04v,
+          lv_name  TYPE ddobjname,
+          ls_tpara TYPE tpara.
+
 
     io_xml->read( EXPORTING iv_name = 'DD04V'
-                  CHANGING  cg_data = ls_dd04v ).
-
-    io_xml->read( EXPORTING iv_name = 'DD04V_TEXTS'
-                  CHANGING  cg_data = lt_dd04v_texts ).
+                  CHANGING cg_data = ls_dd04v ).
+    io_xml->read( EXPORTING iv_name = 'TPARA'
+                  CHANGING cg_data = ls_tpara ).
 
     corr_insert( iv_package ).
 
     lv_name = ms_item-obj_name. " type conversion
-    CALL FUNCTION 'DDIF_DTEL_PUT'  "Master language
+
+    CALL FUNCTION 'DDIF_DTEL_PUT'
       EXPORTING
         name              = lv_name
         dd04v_wa          = ls_dd04v
@@ -197,14 +193,94 @@ CLASS lcl_object_dtel IMPLEMENTATION.
       lcx_exception=>raise( 'error from DDIF_DTEL_PUT' ).
     ENDIF.
 
-    LOOP AT lt_dd04v_texts INTO ls_dd04v.
+    deserialize_texts( io_xml   = io_xml
+                       is_dd04v = ls_dd04v ).
 
-      CHECK lcl_objects=>is_language_installed( ls_dd04v-ddlanguage ) = abap_true.
+    lcl_objects_activation=>add_item( ms_item ).
 
+  ENDMETHOD.                    "deserialize
+  METHOD serialize_texts.
+    DATA: lv_name        TYPE ddobjname,
+          lv_index       TYPE i,
+          ls_dd04v       TYPE dd04v,
+          ls_tpara       TYPE tpara,
+          lt_dd04_texts  TYPE tt_dd04_texts,
+          lt_i18n_langs  TYPE TABLE OF langu.
+    FIELD-SYMBOLS: <lang>      LIKE LINE OF lt_i18n_langs,
+                   <dd04_text> TYPE ty_dd04_texts.
+
+    lv_name = ms_item-obj_name.
+
+    " Collect additional languages
+    SELECT DISTINCT ddlanguage as langu INTO TABLE lt_i18n_langs
+      FROM dd04v
+      WHERE rollname = lv_name
+      AND   ddlanguage <> mv_language. " Skip master lang - it was serialized already
+
+    LOOP AT lt_i18n_langs ASSIGNING <lang>.
+      lv_index = sy-tabix.
+      CALL FUNCTION 'DDIF_DTEL_GET'
+        EXPORTING
+          name          = lv_name
+          langu         = <lang>
+        IMPORTING
+          dd04v_wa      = ls_dd04v
+          tpara_wa      = ls_tpara
+        EXCEPTIONS
+          illegal_input = 1
+          OTHERS        = 2.
+      IF sy-subrc <> 0 OR ls_dd04v-ddlanguage IS INITIAL.
+        DELETE lt_i18n_langs INDEX lv_index. " Don't save this lang
+        CONTINUE.
+      ENDIF.
+
+      APPEND INITIAL LINE TO lt_dd04_texts ASSIGNING <dd04_text>.
+      MOVE-CORRESPONDING ls_dd04v TO <dd04_text>.
+
+    ENDLOOP.
+
+    IF lines( lt_i18n_langs ) > 0.
+      io_xml->add( iv_name = 'I18N_LANGS'
+                   ig_data = lt_i18n_langs ).
+
+      io_xml->add( iv_name = 'DD04_TEXTS'
+                   ig_data = lt_dd04_texts ).
+    ENDIF.
+
+  ENDMETHOD.
+  METHOD deserialize_texts.
+    DATA: lv_name         TYPE ddobjname,
+          ls_dd04v_tmp    TYPE dd04v,
+          lt_i18n_langs   TYPE TABLE OF langu,
+          lt_dd04_texts   TYPE tt_dd04_texts.
+    FIELD-SYMBOLS: <lang>      LIKE LINE OF lt_i18n_langs,
+                   <dd04_text> TYPE ty_dd04_texts.
+
+    lv_name = ms_item-obj_name.
+
+    io_xml->read( EXPORTING iv_name = 'I18N_LANGS'
+                  CHANGING  cg_data = lt_i18n_langs ).
+
+    io_xml->read( EXPORTING iv_name = 'DD04_TEXTS'
+                  CHANGING  cg_data = lt_dd04_texts ).
+
+    SORT: lt_i18n_langs, lt_dd04_texts BY ddlanguage. " Optimization
+    LOOP AT lt_i18n_langs ASSIGNING <lang>.
+
+      " Skip languages that are not installed
+      CHECK lcl_objects=>is_language_installed( <lang> ) = abap_true.
+
+      " Data element description
+      ls_dd04v_tmp = is_dd04v.
+      READ TABLE lt_dd04_texts ASSIGNING <dd04_text> WITH KEY ddlanguage = <lang>.
+      IF sy-subrc > 0.
+        lcx_exception=>raise( |DD04_TEXTS cannot find lang { <lang> } in XML| ).
+      ENDIF.
+      MOVE-CORRESPONDING <dd04_text> TO ls_dd04v_tmp.
       CALL FUNCTION 'DDIF_DTEL_PUT'
         EXPORTING
           name              = lv_name
-          dd04v_wa          = ls_dd04v
+          dd04v_wa          = ls_dd04v_tmp
         EXCEPTIONS
           dtel_not_found    = 1
           name_inconsistent = 2
@@ -213,11 +289,8 @@ CLASS lcl_object_dtel IMPLEMENTATION.
           put_refused       = 5
           OTHERS            = 6.
       IF sy-subrc <> 0.
-        lcx_exception=>raise( 'error from DDIF_DTEL_PUT' ).
+        lcx_exception=>raise( 'error from DDIF_DTEL_PUT @TEXTS' ).
       ENDIF.
     ENDLOOP.
-    lcl_objects_activation=>add_item( ms_item ).
-
-  ENDMETHOD.                    "deserialize
-
+  ENDMETHOD.
 ENDCLASS.                    "lcl_object_dtel IMPLEMENTATION
