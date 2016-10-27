@@ -14,15 +14,17 @@ CLASS lcl_object_dtel DEFINITION INHERITING FROM lcl_objects_super FINAL.
     ALIASES mo_files FOR lif_object~mo_files.
 
   PRIVATE SECTION.
+
     TYPES: BEGIN OF ty_dd04_texts,
-             ddlanguage type dd04t-ddlanguage,
-             ddtext	    type dd04t-ddtext,
-             reptext    type dd04t-reptext,
-             scrtext_s  type dd04t-scrtext_s,
-             scrtext_m  type dd04t-scrtext_m,
-             scrtext_l  type dd04t-scrtext_l,
+             ddlanguage TYPE dd04t-ddlanguage,
+             ddtext	    TYPE dd04t-ddtext,
+             reptext    TYPE dd04t-reptext,
+             scrtext_s  TYPE dd04t-scrtext_s,
+             scrtext_m  TYPE dd04t-scrtext_m,
+             scrtext_l  TYPE dd04t-scrtext_l,
            END OF ty_dd04_texts,
            tt_dd04_texts TYPE STANDARD TABLE OF ty_dd04_texts.
+
     METHODS:
       serialize_texts
         IMPORTING io_xml TYPE REF TO lcl_xml_output
@@ -97,8 +99,8 @@ CLASS lcl_object_dtel IMPLEMENTATION.
 
     DATA: lv_objname TYPE rsedd0-ddobjname.
 
-
     lv_objname = ms_item-obj_name.
+
 
     CALL FUNCTION 'RS_DD_DELETE_OBJ'
       EXPORTING
@@ -117,11 +119,13 @@ CLASS lcl_object_dtel IMPLEMENTATION.
   ENDMETHOD.                    "delete
 
   METHOD lif_object~serialize.
+
     DATA: lv_name  TYPE ddobjname,
           ls_dd04v TYPE dd04v,
           ls_tpara TYPE tpara.
 
     lv_name = ms_item-obj_name.
+
 
     CALL FUNCTION 'DDIF_DTEL_GET'
       EXPORTING
@@ -164,7 +168,7 @@ CLASS lcl_object_dtel IMPLEMENTATION.
 
   METHOD lif_object~deserialize.
 
- DATA: ls_dd04v TYPE dd04v,
+    DATA: ls_dd04v TYPE dd04v,
           lv_name  TYPE ddobjname,
           ls_tpara TYPE tpara.
 
@@ -199,7 +203,9 @@ CLASS lcl_object_dtel IMPLEMENTATION.
     lcl_objects_activation=>add_item( ms_item ).
 
   ENDMETHOD.                    "deserialize
+
   METHOD serialize_texts.
+
     DATA: lv_name        TYPE ddobjname,
           lv_index       TYPE i,
           ls_dd04v       TYPE dd04v,
@@ -248,7 +254,9 @@ CLASS lcl_object_dtel IMPLEMENTATION.
     ENDIF.
 
   ENDMETHOD.
+
   METHOD deserialize_texts.
+
     DATA: lv_name         TYPE ddobjname,
           ls_dd04v_tmp    TYPE dd04v,
           lt_i18n_langs   TYPE TABLE OF langu,
@@ -292,5 +300,7 @@ CLASS lcl_object_dtel IMPLEMENTATION.
         lcx_exception=>raise( 'error from DDIF_DTEL_PUT @TEXTS' ).
       ENDIF.
     ENDLOOP.
+
   ENDMETHOD.
+
 ENDCLASS.                    "lcl_object_dtel IMPLEMENTATION
