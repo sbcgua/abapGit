@@ -331,12 +331,13 @@ CLASS lcl_gui_view_repo_content IMPLEMENTATION.
     CREATE OBJECT ro_html.
 
     TRY.
-        ro_html->add( render_repo_menu( ) ).
 
         CREATE OBJECT lo_browser EXPORTING io_repo = mo_repo.
         lt_repo_items = lo_browser->list( iv_path         = mv_cur_dir
                                           iv_by_folders   = mv_show_folders
                                           iv_changes_only = mv_changes_only ).
+
+        ro_html->add( render_repo_menu( ) ).
 
         lo_log = lo_browser->get_log( ).
         IF mo_repo->is_offline( ) = abap_false AND lo_log->count( ) > 0.
@@ -505,7 +506,11 @@ CLASS lcl_gui_view_repo_content IMPLEMENTATION.
     " Render ==========================================
     ro_html->add( '<div class="paddings">' ).
     ro_html->add( '<table width="100%"><tr>' ).
-    ro_html->add( |<td class="current_dir">{ mv_cur_dir }</td>| ).
+
+    IF mv_show_folders = abap_true.
+      ro_html->add( |<td class="current_dir">{ mv_cur_dir }</td>| ).
+    ENDIF.
+
     ro_html->add( '<td class="right">' ).
     ro_html->add( lo_toolbar->render( ) ).
     ro_html->add( '</td>' ).
