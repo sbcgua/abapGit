@@ -13,6 +13,23 @@ CLASS lcl_object_msag DEFINITION INHERITING FROM lcl_objects_super FINAL.
     INTERFACES lif_object.
     ALIASES mo_files FOR lif_object~mo_files.
 
+  PRIVATE SECTION.
+    TYPES: BEGIN OF ty_t100_texts,
+           sprsl TYPE t100-sprsl,
+           msgnr TYPE t100-msgnr,
+           text  TYPE t100-text,
+           END OF ty_t100_texts,
+           tt_t100_texts  TYPE STANDARD TABLE OF ty_t100_texts.
+
+    METHODS:
+      serialize_texts
+        IMPORTING io_xml TYPE REF TO lcl_xml_output
+        RAISING   lcx_exception,
+      deserialize_texts
+        IMPORTING io_xml        TYPE REF TO lcl_xml_input
+        RAISING   lcx_exception.
+
+
 ENDCLASS.                    "lcl_object_msag DEFINITION
 
 *----------------------------------------------------------------------*
@@ -82,11 +99,11 @@ CLASS lcl_object_msag IMPLEMENTATION.
   METHOD lif_object~deserialize.
 * fm RPY_MESSAGE_ID_INSERT almost works, but not in older versions
 
-    DATA: ls_t100a  TYPE t100a,
-          ls_t100t  TYPE t100t,
-          ls_t100u  TYPE t100u,
-          lt_t100   TYPE TABLE OF t100,
-          lt_before TYPE TABLE OF t100u.
+    DATA: ls_t100a      TYPE t100a,
+          ls_t100t      TYPE t100t,
+          ls_t100u      TYPE t100u,
+          lt_t100       TYPE TABLE OF t100,
+          lt_before     TYPE TABLE OF t100u.
 
     FIELD-SYMBOLS: <ls_t100> LIKE LINE OF lt_t100.
 
@@ -111,7 +128,7 @@ CLASS lcl_object_msag IMPLEMENTATION.
       lcx_exception=>raise( 'Error from RS_CORR_INSERT' ).
     ENDIF.
 
-    SELECT * FROM t100u INTO TABLE lt_before WHERE arbgb = ls_t100a-arbgb.
+    SELECT * FROM t100u INTO TABLE lt_before WHERE arbgb = ls_t100a-arbgb. "#EC CI_GENBUFF
 
     LOOP AT lt_t100 ASSIGNING <ls_t100>.
       DELETE lt_before WHERE msgnr = <ls_t100>-msgnr.
@@ -147,6 +164,9 @@ CLASS lcl_object_msag IMPLEMENTATION.
       DELETE FROM t100u WHERE arbgb = ls_t100u-arbgb AND msgnr = ls_t100u-msgnr.
     ENDLOOP.
 
+    deserialize_texts( io_xml = io_xml ).
+
+
   ENDMETHOD.                    "deserialize
 
   METHOD lif_object~serialize.
@@ -168,7 +188,7 @@ CLASS lcl_object_msag IMPLEMENTATION.
     SELECT * FROM t100 INTO TABLE lt_source
       WHERE sprsl = mv_language
       AND arbgb = lv_msg_id
-      ORDER BY PRIMARY KEY.               "#EC CI_SUBRC "#EC CI_GENBUFF
+      ORDER BY PRIMARY KEY.      "#EC CI_SUBRC "#EC CI_GENBUFF
 
     CLEAR: ls_inf-lastuser,
            ls_inf-ldate,
@@ -179,6 +199,58 @@ CLASS lcl_object_msag IMPLEMENTATION.
     io_xml->add( ig_data = lt_source
                  iv_name = 'T100' ).
 
+    serialize_texts( io_xml ).
+
   ENDMETHOD.                    "serialize
+
+  METHOD serialize_texts.
+
+    DATA: lv_msg_id     TYPE rglif-message_id,
+          lt_t100_texts TYPE tt_t100_texts.
+
+
+    lv_msg_id = ms_item-obj_name.
+
+    SELECT * FROM t100 INTO CORRESPONDING FIELDS OF TABLE lt_t100_texts
+      WHERE sprsl <> mv_language
+      AND arbgb = lv_msg_id
+      ORDER BY PRIMARY KEY.               "#EC CI_SUBRC "#EC CI_GENBUFF
+
+    IF lines( lt_t100_texts ) > 0.
+      io_xml->add( iv_name = 'T100_TEXTS'
+                   ig_data = lt_t100_texts ).
+    ENDIF.
+
+  ENDMETHOD.
+
+  METHOD deserialize_texts.
+
+    DATA: lv_msg_id     TYPE rglif-message_id,
+          ls_t100       TYPE t100,
+          lt_t100_texts TYPE tt_t100_texts,
+          lt_t100u      TYPE TABLE OF t100u.
+
+    FIELD-SYMBOLS: <ls_t100_text> TYPE ty_t100_texts.
+
+
+    lv_msg_id = ms_item-obj_name.
+
+    SELECT * FROM t100u INTO TABLE lt_t100u
+      WHERE arbgb = lv_msg_id ORDER BY PRIMARY KEY. "#EC CI_GENBUFF
+
+    io_xml->read( EXPORTING iv_name = 'T100_TEXTS'
+                  CHANGING  cg_data = lt_t100_texts ).
+
+    LOOP AT lt_t100_texts ASSIGNING <ls_t100_text>.
+      "check if message exists
+      READ TABLE lt_t100u TRANSPORTING NO FIELDS WITH KEY arbgb = lv_msg_id
+                                                          msgnr = <ls_t100_text>-msgnr BINARY SEARCH.
+      ASSERT sy-subrc = 0.
+      MOVE-CORRESPONDING <ls_t100_text> TO ls_t100.
+      ls_t100-arbgb = lv_msg_id.
+      MODIFY t100 FROM ls_t100.                         "#EC CI_SUBRC
+    ENDLOOP.
+
+  ENDMETHOD.
 
 ENDCLASS.                    "lcl_object_msag IMPLEMENTATION
