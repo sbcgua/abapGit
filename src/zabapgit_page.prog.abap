@@ -43,6 +43,11 @@ CLASS lcl_gui_page_super DEFINITION ABSTRACT.
       RETURNING VALUE(ro_html)        TYPE REF TO lcl_html_helper
       RAISING   lcx_exception.
 
+    METHODS render_item_state
+        IMPORTING iv1            TYPE char1
+                  iv2            TYPE char1
+        RETURNING VALUE(rv_html) TYPE string.
+
     METHODS render_branch_span
       IMPORTING iv_branch             TYPE string
                 io_repo               TYPE REF TO lcl_repo_online
@@ -104,6 +109,15 @@ CLASS lcl_gui_page_super IMPLEMENTATION.
 
     ro_html->add( '<td class="repo_attr right">' ).
 
+    IF abap_true = lcl_app=>user( )->is_favorite_repo( io_repo->get_key( ) ).
+      lv_icon = 'img/star' ##NO_TEXT.
+    ELSE.
+      lv_icon = 'img/star-grey' ##NO_TEXT.
+    ENDIF.
+    lv_icon = |<img class="pad-sides" src="{ lv_icon }" title="Click to toggle favorite">|.
+    ro_html->add_anchor( iv_act = |{ gc_action-repo_toggle_fav }?{ io_repo->get_key( ) }|
+                         iv_txt = lv_icon ).
+
     IF lo_pback->exists( io_repo->get_key( ) ) = abap_true.
       ro_html->add( '<span class="bg_marker" title="background">BG</span>' ).
     ENDIF.
@@ -136,6 +150,47 @@ CLASS lcl_gui_page_super IMPLEMENTATION.
     ro_html->add( '</tr></table>' ).
 
   ENDMETHOD.
+
+  METHOD render_item_state.
+
+    DATA: lv_system TYPE string.
+
+    FIELD-SYMBOLS <state> TYPE char1.
+
+
+    rv_html = '<span class="state-block">'.
+
+    DO 2 TIMES.
+      CASE sy-index.
+        WHEN 1.
+          ASSIGN iv1 TO <state>.
+          lv_system = 'Local:'.
+        WHEN 2.
+          ASSIGN iv2 TO <state>.
+          lv_system = 'Remote:'.
+      ENDCASE.
+
+      CASE <state>.
+        WHEN gc_state-unchanged.  "None or unchanged
+          IF iv1 = gc_state-added OR iv2 = gc_state-added.
+            rv_html = rv_html && |<span class="none" title="{ lv_system } Not exists">X</span>|.
+          ELSE.
+            rv_html = rv_html && |<span class="none" title="{ lv_system } No changes">&nbsp;</span>|.
+          ENDIF.
+        WHEN gc_state-modified.   "Changed
+          rv_html = rv_html && |<span class="changed" title="{ lv_system } Modified">M</span>|.
+        WHEN gc_state-added.      "Added new
+          rv_html = rv_html && |<span class="added" title="{ lv_system } Added new">A</span>|.
+        WHEN gc_state-mixed.      "Multiple changes (multifile)
+          rv_html = rv_html && |<span class="mixed" title="{ lv_system } Multiple changes">&#x25A0;</span>|.
+        WHEN gc_state-deleted.    "Deleted
+          rv_html = rv_html && |<span class="deleted" title="{ lv_system } Deleted">D</span>|.
+      ENDCASE.
+    ENDDO.
+
+    rv_html = rv_html && '</span>'.
+
+  ENDMETHOD. "render_item_state
 
   METHOD render_branch_span.
     DATA: lv_text  TYPE string,
@@ -194,7 +249,7 @@ CLASS lcl_gui_page_super IMPLEMENTATION.
     ro_html->add( '<table width="100%"><tr>' ).             "#EC NOTEXT
 
     ro_html->add( '<td class="logo">' ).                    "#EC NOTEXT
-    ro_html->add( |<a href="sapevent:{ gc_action-abapgit_home }">| ).      "#EC NOTEXT
+    ro_html->add( |<a href="sapevent:{ gc_action-abapgit_home }">| ). "#EC NOTEXT
     ro_html->add( '<img src="img/logo">' ).                 "#EC NOTEXT
     ro_html->add( '</a>' ).                                 "#EC NOTEXT
     ro_html->add( '</td>' ).                                "#EC NOTEXT
@@ -220,40 +275,37 @@ CLASS lcl_gui_page_super IMPLEMENTATION.
 
     ro_html->add( '<div id="footer">' ).                    "#EC NOTEXT
     ro_html->add( '<img src="img/logo" >' ).                "#EC NOTEXT
-    ro_html->add( '<table width="100%"><tr><td width="40%"></td><td>' ).  "#EC NOTEXT
-    ro_html->add( |<span class="version">{ gc_abap_version }</span>| ).   "#EC NOTEXT
+    ro_html->add( '<table width="100%"><tr><td width="40%"></td><td>' ). "#EC NOTEXT
+    ro_html->add( |<span class="version">{ gc_abap_version }</span>| ). "#EC NOTEXT
     ro_html->add( '</td><td id="stdout" width="40%"></td></tr></table>' ). "#EC NOTEXT
     ro_html->add( '</div>' ).                               "#EC NOTEXT
     ro_html->add( '</body>' ).                              "#EC NOTEXT
 
     " Common JS routines
-    _add '<script type="text/javascript">' .                    "#EC NOTEXT
+    _add '<script type="text/javascript">' .                "#EC NOTEXT
 
-    _add 'function debugOutput(text, dstID) {'.                 "#EC NOTEXT
-    _add '  var stdout = document.getElementById(dstID || "stdout");'.   "#EC NOTEXT
-    _add '  if (stdout.innerHTML == "") {'.                     "#EC NOTEXT
-    _add '    stdout.innerHTML = text;'.                        "#EC NOTEXT
-    _add '  } else {'.                                          "#EC NOTEXT
-    _add '    stdout.innerHTML = stdout.innerHTML + "<br>" + text;'.  "#EC NOTEXT
-    _add '  }'.                                                 "#EC NOTEXT
-    _add '}'.                                                   "#EC NOTEXT
+    _add 'function debugOutput(text, dstID) {'.             "#EC NOTEXT
+    _add '  var stdout = document.getElementById(dstID || "stdout");'. "#EC NOTEXT
+    _add '  var wrapped = "<p>" + text + "</p>";'.                     "#EC NOTEXT
+    _add '  stdout.innerHTML = stdout.innerHTML + wrapped;'.           "#EC NOTEXT
+    _add '}'.                                               "#EC NOTEXT
 
-    _add 'function submitForm(params, action) {'.                     "#EC NOTEXT
-    _add '  var form = document.createElement("form"); '.             "#EC NOTEXT
-    _add '  form.setAttribute("method", "post"); '.                   "#EC NOTEXT
-    _add '  form.setAttribute("action", "sapevent:" + action); '.     "#EC NOTEXT
-    _add '  for(var key in params) {'.                                "#EC NOTEXT
-    _add '    var hiddenField = document.createElement("input"); '.   "#EC NOTEXT
-    _add '    hiddenField.setAttribute("type", "hidden"); '.          "#EC NOTEXT
-    _add '    hiddenField.setAttribute("name", key); '.               "#EC NOTEXT
-    _add '    hiddenField.setAttribute("value", params[key]); '.      "#EC NOTEXT
-    _add '    form.appendChild(hiddenField); '.                       "#EC NOTEXT
-    _add '  }'.                                                       "#EC NOTEXT
-    _add '  document.body.appendChild(form); '.                       "#EC NOTEXT
-    _add '  form.submit(); '.                                         "#EC NOTEXT
-    _add '}'.                                                       "#EC NOTEXT
+    _add 'function submitForm(params, action) {'.           "#EC NOTEXT
+    _add '  var form = document.createElement("form"); '.   "#EC NOTEXT
+    _add '  form.setAttribute("method", "post"); '.         "#EC NOTEXT
+    _add '  form.setAttribute("action", "sapevent:" + action); '. "#EC NOTEXT
+    _add '  for(var key in params) {'.                      "#EC NOTEXT
+    _add '    var hiddenField = document.createElement("input"); '. "#EC NOTEXT
+    _add '    hiddenField.setAttribute("type", "hidden"); '. "#EC NOTEXT
+    _add '    hiddenField.setAttribute("name", key); '.     "#EC NOTEXT
+    _add '    hiddenField.setAttribute("value", params[key]); '. "#EC NOTEXT
+    _add '    form.appendChild(hiddenField); '.             "#EC NOTEXT
+    _add '  }'.                                             "#EC NOTEXT
+    _add '  document.body.appendChild(form); '.             "#EC NOTEXT
+    _add '  form.submit(); '.                               "#EC NOTEXT
+    _add '}'.                                               "#EC NOTEXT
 
-    _add '</script>'.                                           "#EC NOTEXT
+    _add '</script>'.                                       "#EC NOTEXT
 
     IF io_include_script IS BOUND.
       ro_html->add( '<script type="text/javascript">' ).
@@ -327,6 +379,8 @@ CLASS lcl_gui_page_super IMPLEMENTATION.
     _add '.crossout         { text-decoration: line-through !important; }'.
     _add '.right            { text-align:right; }'.
     _add '.paddings         { padding: 0.5em 0.5em; }'.
+    _add '.pad-sides        { padding: 0 0.3em; }'.
+    _add '.pad4px           { padding: 4px; }'.
 
     " Structure div styles: header, footer, toc
     _add '/* STRUCTURE DIVS, HEADER & FOOTER */'.
@@ -390,7 +444,7 @@ CLASS lcl_gui_page_super IMPLEMENTATION.
     _add '  font-size: 12pt;'.
     _add '}'.
 
-    " Drop down styles
+    " Dropdown styles :mechanics
     _add '/*DROP DOWN*/'.
     _add '.dropdown {'.
     _add '    position: relative;'.
@@ -413,20 +467,47 @@ CLASS lcl_gui_page_super IMPLEMENTATION.
     _add '    display: none;'.
     _add '    z-index: 1;'.
     _add '    position: absolute;'.
-    _add '    right: 0;'.
-*    _add '    top: 1.1em; /*IE7 woraround*/'.
-    _add '    background-color: #f9f9f9;'.
+    _add '    right: -12px;'.
+    _add '    top: 1em;'.
+    _add '    padding: 6px 10px 10px 10px;'.
     _add '    white-space: nowrap;'.
-*    _add '    min-width: 10em;'.
-    _add '    border-bottom: 1px solid lightgrey;'.
     _add '}'.
+    _add '.dropdown div.minizone {'.
+    _add '    display: none;'.
+    _add '    z-index: 1;'.
+    _add '    position: absolute;'.
+    _add '    padding: 0px;'.
+    _add '    width: 16px;'.
+    _add '    height: 16px;'.
+    _add '    bottom: 0px;'.
+    _add '    left: -16px;'.
+    _add '}'.
+
+    _add '.dropdown:hover .dropdown_content { display: block; }'.
+    _add '.dropdown:hover .minizone { display: block; }'.
+
+    " Dropdown styles :styling
     _add '.dropdown_content a {'.
     _add '    padding: 0.2em;'.
+    _add '    background-color: #f9f9f9;'.
     _add '    text-decoration: none;'.
     _add '    display: block;'.
+    _add '    border: none !important;'.
     _add '}'.
+
+
+    _add '.dropdown_content div.box {'.
+    _add '    border-bottom: 1px solid #C0C0C0;'.
+    _add '    border-right: 1px solid #C0C0C0;'.
+    _add '    background-color: #f9f9f9;'.
+    _add '    padding: 2px;'.
+    _add '}'.
+
+    _add '.dropdown_content td      { text-align: left; padding: 2px; }'. " TODO refactor
+    _add '.dropdown_content td a    { padding: 0em 0.2em; }'. " TODO refactor
+    _add '.dropdown_content td.icon { padding: 0 3px 0 6px; }'. " TODO refactor
+
     _add '.dropdown_content a:hover { background-color: #f1f1f1 }'.
-    _add '.dropdown:hover .dropdown_content { display: block; }'.
     _add '.dropdown:hover .dropbtn  { color: #79a0d2; }'.
 
     " REPOSITORY

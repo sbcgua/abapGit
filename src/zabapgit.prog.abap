@@ -3,7 +3,7 @@ REPORT zabapgit LINE-SIZE 100.
 * See http://www.abapgit.org
 
 CONSTANTS: gc_xml_version  TYPE string VALUE 'v1.0.0',      "#EC NOTEXT
-           gc_abap_version TYPE string VALUE 'v1.18.6'.     "#EC NOTEXT
+           gc_abap_version TYPE string VALUE 'v1.23.0'.     "#EC NOTEXT
 
 ********************************************************************************
 * The MIT License (MIT)
@@ -30,7 +30,7 @@ CONSTANTS: gc_xml_version  TYPE string VALUE 'v1.0.0',      "#EC NOTEXT
 ********************************************************************************
 
 SELECTION-SCREEN BEGIN OF SCREEN 1001.
-* dummy for triggering screen
+* dummy for triggering screen on Java SAP GUI
 SELECTION-SCREEN END OF SCREEN 1001.
 
 INCLUDE zabapgit_password_dialog. " !!! Contains SELECTION SCREEN
@@ -53,6 +53,7 @@ INCLUDE zabapgit_stage.
 INCLUDE zabapgit_git_helpers.
 INCLUDE zabapgit_repo.
 INCLUDE zabapgit_stage_logic.
+INCLUDE zabapgit_http.
 INCLUDE zabapgit_git.
 INCLUDE zabapgit_objects.
 INCLUDE zabapgit_tadir.
@@ -75,6 +76,7 @@ INCLUDE zabapgit_gui.
 
 INCLUDE zabapgit_app_impl.
 INCLUDE zabapgit_unit_test.
+INCLUDE zabapgit_migrations.          " Data migration routines
 INCLUDE zabapgit_forms.
 
 **********************************************************************

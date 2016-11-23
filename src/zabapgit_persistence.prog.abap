@@ -1,4 +1,4 @@
-*&---------------------------------------------------------------------*
+*&----------------------------
 *&  Include           ZABAPGIT_PERSISTENCE
 *&---------------------------------------------------------------------*
 
@@ -91,8 +91,8 @@ CLASS lcl_persistence_repo DEFINITION FINAL.
 
   PUBLIC SECTION.
     TYPES: BEGIN OF ty_local_checksum,
-             item TYPE ty_item,
-             sha1 TYPE ty_sha1,
+             item  TYPE ty_item,
+             files TYPE ty_file_signatures_tt,
            END OF ty_local_checksum.
 
     TYPES: ty_local_checksum_tt TYPE STANDARD TABLE OF ty_local_checksum WITH DEFAULT KEY.
@@ -114,6 +114,7 @@ CLASS lcl_persistence_repo DEFINITION FINAL.
         INCLUDE TYPE ty_repo_xml.
     TYPES: END OF ty_repo.
     TYPES: tt_repo TYPE STANDARD TABLE OF ty_repo WITH DEFAULT KEY.
+    TYPES: tt_repo_keys TYPE STANDARD TABLE OF ty_repo-key WITH DEFAULT KEY.
 
     METHODS constructor.
 
@@ -147,8 +148,8 @@ CLASS lcl_persistence_repo DEFINITION FINAL.
       RAISING   lcx_exception.
 
     METHODS update_offline
-      IMPORTING iv_key         TYPE ty_repo-key
-                iv_offline     TYPE ty_repo_xml-offline
+      IMPORTING iv_key     TYPE ty_repo-key
+                iv_offline TYPE ty_repo_xml-offline
       RAISING   lcx_exception.
 
     METHODS add
@@ -240,7 +241,7 @@ CLASS lcl_persistence_background DEFINITION FINAL.
       RAISING   lcx_exception.
 
     METHODS exists
-      IMPORTING iv_key TYPE ty_background-key
+      IMPORTING iv_key        TYPE ty_background-key
       RETURNING VALUE(rv_yes) TYPE abap_bool
       RAISING   lcx_exception.
 
@@ -359,6 +360,8 @@ CLASS lcl_persistence_user DEFINITION FINAL CREATE PRIVATE FRIENDS lcl_app.
 
   PUBLIC SECTION.
 
+    TYPES: tt_favorites TYPE lcl_persistence_repo=>tt_repo_keys.
+
     METHODS set_username
       IMPORTING iv_username TYPE string
       RAISING   lcx_exception.
@@ -384,22 +387,22 @@ CLASS lcl_persistence_user DEFINITION FINAL CREATE PRIVATE FRIENDS lcl_app.
       RAISING   lcx_exception.
 
     METHODS set_repo_username
-      IMPORTING iv_url TYPE lcl_persistence_repo=>ty_repo-url
+      IMPORTING iv_url      TYPE lcl_persistence_repo=>ty_repo-url
                 iv_username TYPE string
       RAISING   lcx_exception.
 
     METHODS get_repo_username
-      IMPORTING iv_url TYPE lcl_persistence_repo=>ty_repo-url
+      IMPORTING iv_url             TYPE lcl_persistence_repo=>ty_repo-url
       RETURNING VALUE(rv_username) TYPE string
       RAISING   lcx_exception.
 
     METHODS set_repo_email
-      IMPORTING iv_url TYPE lcl_persistence_repo=>ty_repo-url
+      IMPORTING iv_url   TYPE lcl_persistence_repo=>ty_repo-url
                 iv_email TYPE string
       RAISING   lcx_exception.
 
     METHODS get_repo_email
-      IMPORTING iv_url TYPE lcl_persistence_repo=>ty_repo-url
+      IMPORTING iv_url          TYPE lcl_persistence_repo=>ty_repo-url
       RETURNING VALUE(rv_email) TYPE string
       RAISING   lcx_exception.
 
@@ -419,15 +422,28 @@ CLASS lcl_persistence_user DEFINITION FINAL CREATE PRIVATE FRIENDS lcl_app.
       RETURNING VALUE(rv_changes_only) TYPE abap_bool
       RAISING   lcx_exception.
 
+    METHODS get_favorites
+      RETURNING VALUE(rt_favorites) TYPE tt_favorites
+      RAISING   lcx_exception.
+
+    METHODS toggle_favorite
+      IMPORTING iv_repo_key   TYPE lcl_persistence_repo=>ty_repo-key
+      RAISING   lcx_exception.
+
+    METHODS is_favorite_repo
+      IMPORTING iv_repo_key   TYPE lcl_persistence_repo=>ty_repo-key
+      RETURNING VALUE(rv_yes) TYPE abap_bool
+      RAISING   lcx_exception.
+
   PRIVATE SECTION.
     CONSTANTS c_type_user TYPE lcl_persistence_db=>ty_type VALUE 'USER'.
 
     DATA: mv_user TYPE xubname.
 
     TYPES: BEGIN OF ty_repo_config,
-             url       TYPE lcl_persistence_repo=>ty_repo-url,
-             username  TYPE string,
-             email     TYPE string,
+             url      TYPE lcl_persistence_repo=>ty_repo-url,
+             username TYPE string,
+             email    TYPE string,
            END OF ty_repo_config.
     TYPES: ty_repo_config_tt TYPE STANDARD TABLE OF ty_repo_config WITH DEFAULT KEY.
 
@@ -438,6 +454,7 @@ CLASS lcl_persistence_user DEFINITION FINAL CREATE PRIVATE FRIENDS lcl_app.
              repo_config  TYPE ty_repo_config_tt,
              hide_files   TYPE abap_bool,
              changes_only TYPE abap_bool,
+             favorites    TYPE tt_favorites,
            END OF ty_user.
 
     METHODS constructor
@@ -461,12 +478,12 @@ CLASS lcl_persistence_user DEFINITION FINAL CREATE PRIVATE FRIENDS lcl_app.
       RAISING   lcx_exception.
 
     METHODS read_repo_config
-      IMPORTING iv_url TYPE lcl_persistence_repo=>ty_repo-url
+      IMPORTING iv_url                TYPE lcl_persistence_repo=>ty_repo-url
       RETURNING VALUE(rs_repo_config) TYPE ty_repo_config
       RAISING   lcx_exception.
 
     METHODS update_repo_config
-      IMPORTING iv_url TYPE lcl_persistence_repo=>ty_repo-url
+      IMPORTING iv_url         TYPE lcl_persistence_repo=>ty_repo-url
                 is_repo_config TYPE ty_repo_config
       RAISING   lcx_exception.
 
@@ -525,7 +542,7 @@ CLASS lcl_persistence_user IMPLEMENTATION.
     ls_user-repo_show = iv_key.
     update( ls_user ).
 
-    COMMIT WORK.
+    COMMIT WORK AND WAIT.
 
   ENDMETHOD.
 
@@ -681,8 +698,50 @@ CLASS lcl_persistence_user IMPLEMENTATION.
 
   ENDMETHOD. "get_changes_only
 
+  METHOD get_favorites.
+
+    rt_favorites = read( )-favorites.
+
+  ENDMETHOD.  "get_favorites
+
+  METHOD toggle_favorite.
+
+    DATA: ls_user TYPE ty_user.
+
+    ls_user = read( ).
+
+    READ TABLE ls_user-favorites TRANSPORTING NO FIELDS
+      WITH KEY table_line = iv_repo_key.
+
+    IF sy-subrc = 0.
+      DELETE ls_user-favorites INDEX sy-tabix.
+    ELSE.
+      APPEND iv_repo_key TO ls_user-favorites.
+    ENDIF.
+
+    update( ls_user ).
+
+  ENDMETHOD.  " toggle_favorite.
+
+  METHOD is_favorite_repo.
+
+    DATA: lt_favorites TYPE tt_favorites.
+
+    lt_favorites = get_favorites( ).
+
+    READ TABLE lt_favorites TRANSPORTING NO FIELDS
+      WITH KEY table_line = iv_repo_key.
+
+    rv_yes = boolc( sy-subrc = 0 ).
+
+  ENDMETHOD.  " is_favorite_repo.
 
 ENDCLASS.
+
+
+*----------------------------------------------------------------------*
+*       CLASS lcl_persistence_db
+*----------------------------------------------------------------------*
 
 CLASS lcl_persistence_db IMPLEMENTATION.
 
@@ -799,6 +858,11 @@ CLASS lcl_persistence_db IMPLEMENTATION.
   ENDMETHOD.
 
 ENDCLASS.
+
+
+*----------------------------------------------------------------------*
+*       CLASS lcl_persistence_repo
+*----------------------------------------------------------------------*
 
 CLASS lcl_persistence_repo IMPLEMENTATION.
 
@@ -1343,6 +1407,241 @@ CLASS lcl_persistence_migrate IMPLEMENTATION.
       lcx_exception=>raise( 'migrate, error from DDIF_TABL_ACTIVATE' ).
     ENDIF.
 
+  ENDMETHOD.
+
+ENDCLASS.
+
+CLASS lcl_settings DEFINITION FINAL.
+
+  PUBLIC SECTION.
+    METHODS set_proxy_url
+      IMPORTING
+        iv_url TYPE string.
+    METHODS set_proxy_port
+      IMPORTING
+        iv_port TYPE string.
+    METHODS get_proxy_url
+      RETURNING
+        VALUE(rv_proxy_url) TYPE string.
+    METHODS get_proxy_port
+      RETURNING
+        VALUE(rv_port) TYPE string.
+  PROTECTED SECTION.
+
+  PRIVATE SECTION.
+    DATA mv_proxy_url TYPE string.
+    DATA mv_proxy_port TYPE string.
+
+
+ENDCLASS.
+
+CLASS lcl_settings IMPLEMENTATION.
+
+
+  METHOD set_proxy_url.
+    mv_proxy_url = iv_url.
+  ENDMETHOD.
+
+  METHOD get_proxy_url.
+    rv_proxy_url = mv_proxy_url.
+  ENDMETHOD.
+
+  METHOD set_proxy_port.
+    mv_proxy_port = iv_port.
+  ENDMETHOD.
+
+  METHOD get_proxy_port.
+    rv_port = mv_proxy_port.
+  ENDMETHOD.
+
+ENDCLASS.
+
+
+CLASS lcl_persistence_settings DEFINITION FINAL.
+
+  PUBLIC SECTION.
+    METHODS modify
+      IMPORTING
+        io_settings TYPE REF TO lcl_settings
+      RAISING
+        lcx_exception.
+    METHODS read
+      RETURNING
+        VALUE(ro_settings) TYPE REF TO lcl_settings.
+
+  PROTECTED SECTION.
+
+  PRIVATE SECTION.
+
+ENDCLASS.
+
+CLASS lcl_persistence_settings IMPLEMENTATION.
+
+
+  METHOD modify.
+    lcl_app=>db( )->modify(
+      iv_type       = 'SETTINGS'
+      iv_value      = 'PROXY_URL'
+      iv_data       = io_settings->get_proxy_url( ) ).
+
+    lcl_app=>db( )->modify(
+      iv_type       = 'SETTINGS'
+      iv_value      = 'PROXY_PORT'
+      iv_data       = io_settings->get_proxy_port( ) ).
+  ENDMETHOD.
+
+
+  METHOD read.
+    CREATE OBJECT ro_settings.
+    TRY.
+        ro_settings->set_proxy_url(
+          lcl_app=>db( )->read(
+            iv_type  = 'SETTINGS'
+            iv_value = 'PROXY_URL'
+          ) ).
+      CATCH lcx_not_found.
+        ro_settings->set_proxy_url( '' ).
+    ENDTRY.
+    TRY.
+        ro_settings->set_proxy_port(
+          lcl_app=>db( )->read(
+            iv_type  = 'SETTINGS'
+            iv_value = 'PROXY_PORT'
+          ) ).
+      CATCH lcx_not_found.
+        ro_settings->set_proxy_port( '' ).
+    ENDTRY.
+  ENDMETHOD.
+
+ENDCLASS.
+
+CLASS ltcl_persistence_settings DEFINITION FINAL FOR TESTING
+  DURATION SHORT
+  RISK LEVEL HARMLESS.
+
+  PRIVATE SECTION.
+    METHODS:
+      setup,
+      modify_settings_proxy_url  FOR TESTING,
+      modify_settings_proxy_port FOR TESTING,
+      read_settings              FOR TESTING,
+      read_not_found_url         FOR TESTING,
+      read_not_found_port        FOR TESTING.
+    DATA:
+      mo_persistence_settings TYPE REF TO lcl_persistence_settings,
+      mo_settings             TYPE REF TO lcl_settings.
+ENDCLASS.
+
+CLASS ltcl_persistence_settings IMPLEMENTATION.
+  METHOD setup.
+    CREATE OBJECT mo_persistence_settings.
+    "These tests may fail if you are locking the entries (e.g. the ZABAPGIT transaction is open)
+  ENDMETHOD.
+
+  METHOD modify_settings_proxy_url.
+    DATA lv_proxy_url TYPE string.
+    TRY.
+        CREATE OBJECT mo_settings.
+        mo_settings->set_proxy_url( 'http://proxy' ).
+
+        mo_persistence_settings->modify( mo_settings ).
+
+        lv_proxy_url = lcl_app=>db( )->read(
+          iv_type  = 'SETTINGS'
+          iv_value = 'PROXY_URL' ).
+
+        cl_abap_unit_assert=>assert_equals(
+          act = lv_proxy_url
+          exp = 'http://proxy' ).
+      CATCH cx_root.
+        cl_abap_unit_assert=>fail( 'Unexpected exception' ).
+    ENDTRY.
+  ENDMETHOD.
+
+  METHOD modify_settings_proxy_port.
+    DATA lv_proxy_port TYPE string.
+    TRY.
+        CREATE OBJECT mo_settings.
+        mo_settings->set_proxy_port( '8080' ).
+
+        mo_persistence_settings->modify( mo_settings ).
+
+        lv_proxy_port = lcl_app=>db( )->read(
+          iv_type  = 'SETTINGS'
+          iv_value = 'PROXY_PORT' ).
+
+        cl_abap_unit_assert=>assert_equals(
+          act = lv_proxy_port
+          exp = '8080' ).
+      CATCH cx_root.
+        cl_abap_unit_assert=>fail( 'Unexpected exception' ).
+    ENDTRY.
+  ENDMETHOD.
+
+  METHOD read_settings.
+    TRY.
+        lcl_app=>db( )->modify(
+          iv_type       = 'SETTINGS'
+          iv_value      = 'PROXY_URL'
+          iv_data       = 'A_URL' ).
+
+        lcl_app=>db( )->modify(
+          iv_type       = 'SETTINGS'
+          iv_value      = 'PROXY_PORT'
+          iv_data       = '1000' ).
+
+        mo_settings = mo_persistence_settings->read( ).
+
+        cl_abap_unit_assert=>assert_equals(
+          act = mo_settings->get_proxy_url( )
+          exp = 'A_URL' ).
+        cl_abap_unit_assert=>assert_equals(
+          act = mo_settings->get_proxy_port( )
+          exp = '1000' ).
+      CATCH cx_root.
+        cl_abap_unit_assert=>fail( 'Unexpected exception' ).
+    ENDTRY.
+  ENDMETHOD.
+
+  METHOD read_not_found_port.
+    TRY.
+        lcl_app=>db( )->modify(
+          iv_type       = 'SETTINGS'
+          iv_value      = 'PROXY_URL'
+          iv_data       = 'A_URL' ).
+        lcl_app=>db( )->modify(
+          iv_type       = 'SETTINGS'
+          iv_value      = 'PROXY_PORT'
+          iv_data       = '' ).
+
+        mo_settings = mo_persistence_settings->read( ).
+
+        cl_abap_unit_assert=>assert_equals(
+          act = mo_settings->get_proxy_port( )
+          exp = '' ).
+      CATCH cx_root.
+        cl_abap_unit_assert=>fail( 'Unexpected exception' ).
+    ENDTRY.
+  ENDMETHOD.
+
+  METHOD read_not_found_url.
+    TRY.
+        lcl_app=>db( )->modify(
+           iv_type       = 'SETTINGS'
+           iv_value      = 'PROXY_PORT'
+           iv_data       = '1000' ).
+        lcl_app=>db( )->modify(
+          iv_type       = 'SETTINGS'
+          iv_value      = 'PROXY_URL'
+          iv_data       = '' ).
+        mo_settings = mo_persistence_settings->read( ).
+
+        cl_abap_unit_assert=>assert_equals(
+          act = mo_settings->get_proxy_url( )
+          exp = '' ).
+      CATCH cx_root.
+        cl_abap_unit_assert=>fail( 'Unexpected exception' ).
+    ENDTRY.
   ENDMETHOD.
 
 ENDCLASS.

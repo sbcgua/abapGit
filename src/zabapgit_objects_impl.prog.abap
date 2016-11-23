@@ -13,38 +13,22 @@ CLASS lcl_objects IMPLEMENTATION.
 
     DATA: lv_index    TYPE i,
           lv_answer   TYPE c,
-          lv_question TYPE string,
-          lt_before   TYPE lcl_persistence_repo=>ty_local_checksum_tt,
-          lt_current  TYPE lcl_persistence_repo=>ty_local_checksum_tt.
+          lv_question TYPE string.
 
-    FIELD-SYMBOLS: <ls_before>  LIKE LINE OF lt_before,
-                   <ls_current> LIKE LINE OF lt_current,
-                   <ls_result>  LIKE LINE OF ct_results.
+    FIELD-SYMBOLS: <ls_result>  LIKE LINE OF ct_results.
 
 
-    lt_before = io_repo->get_local_checksums( ).
-    lt_current = io_repo->build_local_checksums( ).
+    LOOP AT ct_results ASSIGNING <ls_result>
+        WHERE NOT obj_type IS INITIAL.
 
-    LOOP AT ct_results ASSIGNING <ls_result>.
       lv_index = sy-tabix.
 
-      READ TABLE lt_before ASSIGNING <ls_before>
-        WITH KEY item-obj_type = <ls_result>-obj_type
-        item-obj_name = <ls_result>-obj_name.
-      IF sy-subrc <> 0.
-        CONTINUE.
-      ENDIF.
-
-      READ TABLE lt_current ASSIGNING <ls_current>
-        WITH KEY item-obj_type = <ls_result>-obj_type
-        item-obj_name = <ls_result>-obj_name.
-      IF sy-subrc <> 0.
-        CONTINUE.
-      ENDIF.
-
-      IF <ls_before>-sha1 <> <ls_current>-sha1.
-        lv_question = |It looks like object { <ls_result>-obj_type
-          } { <ls_result>-obj_name
+      IF <ls_result>-lstate IS NOT INITIAL
+          AND <ls_result>-lstate <> gc_state-deleted
+          AND NOT ( <ls_result>-lstate = gc_state-added
+          AND <ls_result>-rstate IS INITIAL ).
+        lv_question = |It looks like object {
+          <ls_result>-obj_type } { <ls_result>-obj_name
           } has been modified locally, overwrite object?|.
 
         lv_answer = lcl_popups=>popup_to_confirm(
@@ -155,17 +139,18 @@ CLASS lcl_objects IMPLEMENTATION.
             is_item = is_item
             iv_language = iv_language.
       CATCH cx_sy_create_object_error.
-        TRY.
-* 2nd step, try looking for plugins
-            CREATE OBJECT ri_obj TYPE lcl_objects_bridge
-              EXPORTING
-                is_item = is_item.
-          CATCH cx_sy_create_object_error.
-            CONCATENATE 'Object type' is_item-obj_type 'not supported, serialize'
-              INTO lv_message
-              SEPARATED BY space.                           "#EC NOTEXT
-            lcx_exception=>raise( lv_message ).
-        ENDTRY.
+        lv_message = |Object type { is_item-obj_type } not supported, serialize|. "#EC NOTEXT
+        IF iv_native_only = abap_false.
+          TRY. " 2nd step, try looking for plugins
+              CREATE OBJECT ri_obj TYPE lcl_objects_bridge
+                EXPORTING
+                  is_item = is_item.
+            CATCH cx_sy_create_object_error.
+              lcx_exception=>raise( lv_message ).
+          ENDTRY.
+        ELSE. " No native support? -> fail
+          lcx_exception=>raise( lv_message ).
+        ENDIF.
     ENDTRY.
 
   ENDMETHOD.                    "create_object
@@ -186,8 +171,9 @@ CLASS lcl_objects IMPLEMENTATION.
   METHOD is_supported.
 
     TRY.
-        create_object( is_item = is_item
-                       iv_language = gc_english ).
+        create_object( is_item        = is_item
+                       iv_language    = gc_english
+                       iv_native_only = iv_native_only ).
         rv_bool = abap_true.
       CATCH lcx_exception.
         rv_bool = abap_false.
@@ -603,12 +589,6 @@ CLASS lcl_objects IMPLEMENTATION.
 
   METHOD deserialize.
 
-    TYPES: BEGIN OF ty_late,
-             obj     TYPE REF TO lif_object,
-             xml     TYPE REF TO lcl_xml_input,
-             package TYPE devclass,
-           END OF ty_late.
-
     DATA: ls_item    TYPE ty_item,
           lv_cancel  TYPE abap_bool,
           li_obj     TYPE REF TO lif_object,
@@ -628,7 +608,9 @@ CLASS lcl_objects IMPLEMENTATION.
     lt_remote = io_repo->get_files_remote( ).
 
     lt_results = lcl_file_status=>status( io_repo ).
-    DELETE lt_results WHERE match = abap_true.
+    DELETE lt_results WHERE
+      match = abap_true.     " Full match
+*      OR rstate IS INITIAL. " no remote changes, only local
     SORT lt_results BY obj_type ASCENDING obj_name ASCENDING.
     DELETE ADJACENT DUPLICATES FROM lt_results COMPARING obj_type obj_name.
 
@@ -637,7 +619,8 @@ CLASS lcl_objects IMPLEMENTATION.
     warning_overwrite( EXPORTING io_repo = io_repo
                        CHANGING ct_results = lt_results ).
 
-    LOOP AT lt_results ASSIGNING <ls_result>.
+    LOOP AT lt_results ASSIGNING <ls_result> WHERE obj_type IS NOT INITIAL
+        AND NOT ( lstate = gc_state-added AND rstate IS INITIAL ).
       lcl_progress=>show( iv_key     = 'Deserialize'
                           iv_current = sy-tabix
                           iv_total   = lines( lt_results )
@@ -685,6 +668,8 @@ CLASS lcl_objects IMPLEMENTATION.
       li_obj->deserialize( iv_package = lv_package
                            io_xml     = lo_xml ).
 
+      " Remember accessed files
+      APPEND LINES OF lo_files->get_accessed_files( ) TO rt_accessed_files.
     ENDLOOP.
 
     lcl_objects_activation=>activate( ).
@@ -695,6 +680,9 @@ CLASS lcl_objects IMPLEMENTATION.
     ENDLOOP.
 
     update_package_tree( io_repo->get_package( ) ).
+
+    SORT rt_accessed_files BY path ASCENDING filename ASCENDING.
+    DELETE ADJACENT DUPLICATES FROM rt_accessed_files. " Just in case
 
   ENDMETHOD.                    "deserialize
 

@@ -73,11 +73,12 @@ CLASS lcl_gui_router IMPLEMENTATION.
 
     CASE iv_action.
         " General routing
-      WHEN gc_action-go_main                        " Go Main page
+      WHEN gc_action-go_main                          " Go Main page
           OR gc_action-go_explore                     " Go Explore page
           OR gc_action-go_db                          " Go DB util page
           OR gc_action-go_background_run              " Go background run page
-          OR gc_action-go_debuginfo.                  " Go debug info page
+          OR gc_action-go_debuginfo                   " Go debug info page
+          OR gc_action-go_settings.                   " Go settings page
         ei_page  = get_page_by_name( iv_action ).
         ev_state = gc_event_state-new_page.
       WHEN gc_action-go_background.                   " Go Background page
@@ -143,6 +144,12 @@ CLASS lcl_gui_router IMPLEMENTATION.
         ev_state = gc_event_state-re_render.
       WHEN gc_action-repo_clone OR 'install'.    " Repo clone, 'install' is for explore page
         lcl_services_repo=>clone( lv_url ).
+        ev_state = gc_event_state-re_render.
+      WHEN gc_action-repo_refresh_checksums.          " Rebuil local checksums
+        lcl_services_repo=>refresh_local_checksums( lv_key ).
+        ev_state = gc_event_state-re_render.
+      WHEN gc_action-repo_toggle_fav.                 " Toggle repo as favorite
+        lcl_services_repo=>toggle_favorite( lv_key ).
         ev_state = gc_event_state-re_render.
 
         " ZIP services actions

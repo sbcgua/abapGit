@@ -137,7 +137,7 @@ CLASS lcl_object_dtel IMPLEMENTATION.
       EXCEPTIONS
         illegal_input = 1
         OTHERS        = 2.
-    IF sy-subrc <> 0 or ls_dd04v IS INITIAL.
+    IF sy-subrc <> 0 OR ls_dd04v IS INITIAL.
       lcx_exception=>raise( 'Error from DDIF_DTEL_GET' ).
     ENDIF.
 
@@ -151,6 +151,7 @@ CLASS lcl_object_dtel IMPLEMENTATION.
              ls_dd04v-leng,
              ls_dd04v-decimals,
              ls_dd04v-outputlen,
+             ls_dd04v-valexi,
              ls_dd04v-lowercase,
              ls_dd04v-signflag,
              ls_dd04v-convexit,
@@ -206,19 +207,19 @@ CLASS lcl_object_dtel IMPLEMENTATION.
 
   METHOD serialize_texts.
 
-    DATA: lv_name        TYPE ddobjname,
-          lv_index       TYPE i,
-          ls_dd04v       TYPE dd04v,
-          ls_tpara       TYPE tpara,
-          lt_dd04_texts  TYPE tt_dd04_texts,
-          lt_i18n_langs  TYPE TABLE OF langu.
+    DATA: lv_name       TYPE ddobjname,
+          lv_index      TYPE i,
+          ls_dd04v      TYPE dd04v,
+          ls_tpara      TYPE tpara,
+          lt_dd04_texts TYPE tt_dd04_texts,
+          lt_i18n_langs TYPE TABLE OF langu.
     FIELD-SYMBOLS: <lang>      LIKE LINE OF lt_i18n_langs,
                    <dd04_text> TYPE ty_dd04_texts.
 
     lv_name = ms_item-obj_name.
 
     " Collect additional languages
-    SELECT DISTINCT ddlanguage as langu INTO TABLE lt_i18n_langs
+    SELECT DISTINCT ddlanguage AS langu INTO TABLE lt_i18n_langs
       FROM dd04v
       WHERE rollname = lv_name
       AND   ddlanguage <> mv_language. " Skip master lang - it was serialized already
@@ -245,6 +246,9 @@ CLASS lcl_object_dtel IMPLEMENTATION.
 
     ENDLOOP.
 
+    SORT lt_i18n_langs ASCENDING.
+    SORT lt_dd04_texts BY ddlanguage ASCENDING.
+
     IF lines( lt_i18n_langs ) > 0.
       io_xml->add( iv_name = 'I18N_LANGS'
                    ig_data = lt_i18n_langs ).
@@ -257,10 +261,10 @@ CLASS lcl_object_dtel IMPLEMENTATION.
 
   METHOD deserialize_texts.
 
-    DATA: lv_name         TYPE ddobjname,
-          ls_dd04v_tmp    TYPE dd04v,
-          lt_i18n_langs   TYPE TABLE OF langu,
-          lt_dd04_texts   TYPE tt_dd04_texts.
+    DATA: lv_name       TYPE ddobjname,
+          ls_dd04v_tmp  TYPE dd04v,
+          lt_i18n_langs TYPE TABLE OF langu,
+          lt_dd04_texts TYPE tt_dd04_texts.
     FIELD-SYMBOLS: <lang>      LIKE LINE OF lt_i18n_langs,
                    <dd04_text> TYPE ty_dd04_texts.
 
@@ -272,11 +276,10 @@ CLASS lcl_object_dtel IMPLEMENTATION.
     io_xml->read( EXPORTING iv_name = 'DD04_TEXTS'
                   CHANGING  cg_data = lt_dd04_texts ).
 
-    SORT: lt_i18n_langs, lt_dd04_texts BY ddlanguage. " Optimization
-    LOOP AT lt_i18n_langs ASSIGNING <lang>.
+    SORT lt_i18n_langs.
+    SORT lt_dd04_texts BY ddlanguage. " Optimization
 
-      " Skip languages that are not installed
-      CHECK lcl_objects=>is_language_installed( <lang> ) = abap_true.
+    LOOP AT lt_i18n_langs ASSIGNING <lang>.
 
       " Data element description
       ls_dd04v_tmp = is_dd04v.
