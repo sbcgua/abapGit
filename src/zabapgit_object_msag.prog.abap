@@ -206,19 +206,45 @@ CLASS lcl_object_msag IMPLEMENTATION.
   METHOD serialize_texts.
 
     DATA: lv_msg_id     TYPE rglif-message_id,
-          lt_t100_texts TYPE tt_t100_texts.
-
+          lt_t100_texts TYPE tt_t100_texts,
+          lt_t100t      TYPE table of t100t,
+          lt_i18n_langs TYPE TABLE OF langu.
 
     lv_msg_id = ms_item-obj_name.
 
-    SELECT * FROM t100 INTO CORRESPONDING FIELDS OF TABLE lt_t100_texts
-      WHERE sprsl <> mv_language
-      AND arbgb = lv_msg_id
-      ORDER BY PRIMARY KEY.               "#EC CI_SUBRC "#EC CI_GENBUFF
+    " Collect additional languages
+    " Skip master lang - it has been already serialized
+    SELECT DISTINCT sprsl AS langu INTO TABLE lt_i18n_langs
+      FROM t100t
+      WHERE arbgb = lv_msg_id
+      AND   sprsl <> mv_language. "#EC CI_BYPASS "#EC CI_GENBUFF.
 
-    IF lines( lt_t100_texts ) > 0.
+    SORT lt_i18n_langs ASCENDING.
+
+    IF LINES( lt_i18n_langs ) > 0.
+
+      SELECT * FROM t100t INTO CORRESPONDING FIELDS OF TABLE lt_t100t
+        WHERE sprsl <> mv_language
+        AND arbgb = lv_msg_id.  "#EC CI_GENBUFF
+
+      SELECT * FROM t100 INTO CORRESPONDING FIELDS OF TABLE lt_t100_texts
+        FOR ALL ENTRIES IN lt_i18n_langs
+        WHERE sprsl = lt_i18n_langs-table_line
+        AND arbgb = lv_msg_id
+        ORDER BY PRIMARY KEY.               "#EC CI_SUBRC "#EC CI_GENBUFF
+
+      SORT lt_t100t BY sprsl ASCENDING.
+      SORT lt_t100_texts BY sprsl ASCENDING.
+
+      io_xml->add( iv_name = 'I18N_LANGS'
+                   ig_data = lt_i18n_langs ).
+
+      io_xml->add( iv_name = 'T100T'
+                   ig_data = lt_t100t ).
+
       io_xml->add( iv_name = 'T100_TEXTS'
                    ig_data = lt_t100_texts ).
+
     ENDIF.
 
   ENDMETHOD.
@@ -227,6 +253,7 @@ CLASS lcl_object_msag IMPLEMENTATION.
 
     DATA: lv_msg_id     TYPE rglif-message_id,
           ls_t100       TYPE t100,
+          lt_t100t      TYPE table of t100t,
           lt_t100_texts TYPE tt_t100_texts,
           lt_t100u      TYPE TABLE OF t100u.
 
@@ -240,6 +267,11 @@ CLASS lcl_object_msag IMPLEMENTATION.
 
     io_xml->read( EXPORTING iv_name = 'T100_TEXTS'
                   CHANGING  cg_data = lt_t100_texts ).
+
+    io_xml->read( EXPORTING iv_name = 'T100T'
+                  CHANGING  cg_data = lt_t100t ).
+
+    MODIFY t100t FROM TABLE lt_t100t.                    "#EC CI_SUBRC
 
     LOOP AT lt_t100_texts ASSIGNING <ls_t100_text>.
       "check if message exists
