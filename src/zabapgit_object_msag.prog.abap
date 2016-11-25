@@ -128,21 +128,24 @@ CLASS lcl_object_msag IMPLEMENTATION.
       lcx_exception=>raise( 'Error from RS_CORR_INSERT' ).
     ENDIF.
 
-    SELECT * FROM t100u INTO TABLE lt_before WHERE arbgb = ls_t100a-arbgb order by msgnr. "#EC CI_GENBUFF
+    SELECT * FROM t100u INTO TABLE lt_before
+      WHERE arbgb = ls_t100a-arbgb ORDER BY msgnr. "#EC CI_GENBUFF "#EC CI_BYPASS
 
     LOOP AT lt_t100 ASSIGNING <ls_t100>.
       DELETE lt_before WHERE msgnr = <ls_t100>-msgnr.
-
       MODIFY t100 FROM <ls_t100>.                         "#EC CI_SUBRC
-      ASSERT sy-subrc = 0.
-
+      IF sy-subrc <> 0.
+        lcx_exception=>raise( 'MSAG: Table T100 modify failed' ).
+      ENDIF.
       CLEAR ls_t100u.
       MOVE-CORRESPONDING <ls_t100> TO ls_t100u ##enh_ok.
       ls_t100u-name    = sy-uname.
       ls_t100u-datum   = sy-datum.
       ls_t100u-selfdef = '3'.
       MODIFY t100u FROM ls_t100u.                         "#EC CI_SUBRC
-      ASSERT sy-subrc = 0.
+      IF sy-subrc <> 0.
+        lcx_exception=>raise( 'MSAG: Table T100U modify failed' ).
+      ENDIF.
     ENDLOOP.
 
     ls_t100a-masterlang = mv_language.
@@ -151,13 +154,17 @@ CLASS lcl_object_msag IMPLEMENTATION.
     ls_t100a-ldate = sy-datum.
     ls_t100a-ltime = sy-uzeit.
     MODIFY t100a FROM ls_t100a.                           "#EC CI_SUBRC
-    ASSERT sy-subrc = 0.
+    IF sy-subrc <> 0.
+      lcx_exception=>raise( 'MSAG: Table T100A modify failed' ).
+    ENDIF.
 
     ls_t100t-sprsl = mv_language.
     ls_t100t-arbgb = ls_t100a-arbgb.
     ls_t100t-stext = ls_t100a-stext.
     MODIFY t100t FROM ls_t100t.                           "#EC CI_SUBRC
-    ASSERT sy-subrc = 0.
+    IF sy-subrc <> 0.
+      lcx_exception=>raise( 'MSAG: Table T100T modify failed' ).
+    ENDIF.
 
     LOOP AT lt_before INTO ls_t100u.
       DELETE FROM t100 WHERE arbgb = ls_t100u-arbgb AND msgnr = ls_t100u-msgnr.
@@ -275,12 +282,15 @@ CLASS lcl_object_msag IMPLEMENTATION.
 
     LOOP AT lt_t100_texts ASSIGNING <ls_t100_text>.
       "check if message exists
-      READ TABLE lt_t100u TRANSPORTING NO FIELDS WITH KEY arbgb = lv_msg_id
-                                                          msgnr = <ls_t100_text>-msgnr BINARY SEARCH.
-      ASSERT sy-subrc = 0.
+      READ TABLE lt_t100u TRANSPORTING NO FIELDS
+        WITH KEY arbgb = lv_msg_id msgnr = <ls_t100_text>-msgnr BINARY SEARCH.
+      CHECK sy-subrc = 0.
       MOVE-CORRESPONDING <ls_t100_text> TO ls_t100.
       ls_t100-arbgb = lv_msg_id.
       MODIFY t100 FROM ls_t100.                         "#EC CI_SUBRC
+      IF sy-subrc <> 0.
+        lcx_exception=>raise( 'MSAG: Table T100 modify failed' ).
+      ENDIF.
     ENDLOOP.
 
   ENDMETHOD.
