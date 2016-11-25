@@ -128,7 +128,7 @@ CLASS lcl_object_msag IMPLEMENTATION.
       lcx_exception=>raise( 'Error from RS_CORR_INSERT' ).
     ENDIF.
 
-    SELECT * FROM t100u INTO TABLE lt_before WHERE arbgb = ls_t100a-arbgb. "#EC CI_GENBUFF
+    SELECT * FROM t100u INTO TABLE lt_before WHERE arbgb = ls_t100a-arbgb order by msgnr. "#EC CI_GENBUFF
 
     LOOP AT lt_t100 ASSIGNING <ls_t100>.
       DELETE lt_before WHERE msgnr = <ls_t100>-msgnr.
@@ -234,7 +234,7 @@ CLASS lcl_object_msag IMPLEMENTATION.
         ORDER BY PRIMARY KEY.               "#EC CI_SUBRC "#EC CI_GENBUFF
 
       SORT lt_t100t BY sprsl ASCENDING.
-      SORT lt_t100_texts BY sprsl ASCENDING.
+      SORT lt_t100_texts BY sprsl msgnr ASCENDING.
 
       io_xml->add( iv_name = 'I18N_LANGS'
                    ig_data = lt_i18n_langs ).
