@@ -99,11 +99,11 @@ CLASS lcl_object_msag IMPLEMENTATION.
   METHOD lif_object~deserialize.
 * fm RPY_MESSAGE_ID_INSERT almost works, but not in older versions
 
-    DATA: ls_t100a      TYPE t100a,
-          ls_t100t      TYPE t100t,
-          ls_t100u      TYPE t100u,
-          lt_t100       TYPE TABLE OF t100,
-          lt_before     TYPE TABLE OF t100u.
+    DATA: ls_t100a  TYPE t100a,
+          ls_t100t  TYPE t100t,
+          ls_t100u  TYPE t100u,
+          lt_t100   TYPE TABLE OF t100,
+          lt_before TYPE TABLE OF t100u.
 
     FIELD-SYMBOLS: <ls_t100> LIKE LINE OF lt_t100.
 
@@ -284,7 +284,8 @@ CLASS lcl_object_msag IMPLEMENTATION.
       "check if message exists
       READ TABLE lt_t100u TRANSPORTING NO FIELDS
         WITH KEY arbgb = lv_msg_id msgnr = <ls_t100_text>-msgnr BINARY SEARCH.
-      CHECK sy-subrc = 0.
+      CHECK sy-subrc = 0. "if original message doesn't exist no translations added
+
       MOVE-CORRESPONDING <ls_t100_text> TO ls_t100.
       ls_t100-arbgb = lv_msg_id.
       MODIFY t100 FROM ls_t100.                         "#EC CI_SUBRC
