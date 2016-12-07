@@ -139,7 +139,7 @@ CLASS lcl_gui_router IMPLEMENTATION.
         lcl_services_abapgit=>install_abapgit( ).
         ev_state = gc_event_state-re_render.
       WHEN gc_action-abapgit_install_pi.              " Install abapGit plugins
-*        lcl_services_abapgit=>install_abapgit( ).
+        lcl_services_abapgit=>install_abapgit_pi( ).
         ev_state = gc_event_state-re_render.
 
         " Repository services actions

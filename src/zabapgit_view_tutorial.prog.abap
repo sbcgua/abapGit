@@ -36,15 +36,22 @@ CLASS lcl_gui_view_tutorial IMPLEMENTATION.
     _add '<li>To choose a repo press <img src="img/burger"> at the favorite bar.</li>'.
     _add '<li>To add a repo as favorite'.
     _add ' click <img src="img/star-grey"> icon at repo toolbar.</li>'.
-    _add `<li>To clone a repo click `.
-    ro_html->add_anchor( iv_txt = '+ Clone' iv_act = gc_action-repo_clone ).
-    _add ' from the top menu</li>'.
-    _add `<li>To add a local package as a repo click `.
-    ro_html->add_anchor( iv_txt = '+ Offline' iv_act = gc_action-repo_newoffline ).
-    _add ' from the top menu</li>'.
     _add '</ul></p>'.
 
-    _add '<h2>AbapGit repositories</h2>'.
+
+    _add '<h2>Adding and cloning repos</h2>'.
+    _add '<p><ul>'.
+    _add `<li>To clone a remote repo (e.g. from github) click `.
+    ro_html->add_anchor( iv_txt = '+ Clone' iv_act = gc_action-repo_clone ).
+    _add ' from the top menu. This will copy a remote repo to your system.</li>'.
+    _add `<li>To add a local package as a repo click `.
+    ro_html->add_anchor( iv_txt = '+ Offline' iv_act = gc_action-repo_newoffline ).
+    _add ' from the top menu. This will track a repo which already exist in'.
+    _add ' the system with abapGit. You''ll be able to attach it to remote origin'.
+    _add ' or just serialize as a zip file</li>'.
+    _add '</ul></p>'.
+
+    _add '<h2>abapGit related repositories</h2>'.
 
     _add '<p><ul>'.
     _add '<li>'.
@@ -55,12 +62,6 @@ CLASS lcl_gui_view_tutorial IMPLEMENTATION.
     ro_html->add_anchor( iv_txt = 'install abapGit plugins' iv_act = gc_action-abapgit_install_pi ).
     _add ' - you can also install plugins to extend supported object types</li>'.
     _add '</ul></p>'.
-
-
-
-*    IF lcl_services_abapgit=>needs_installation( ) = abap_true.
-*      ro_menu->add( iv_txt = 'Get abapGit'    iv_act = gc_action-abapgit_install ) ##NO_TEXT.
-*    ENDIF.
 
   ENDMETHOD. " render_content.
 
