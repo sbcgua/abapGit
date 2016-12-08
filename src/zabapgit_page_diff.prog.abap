@@ -254,6 +254,9 @@ CLASS lcl_gui_page_diff IMPLEMENTATION.
   ENDMETHOD.  " render_beacon.
 
   METHOD render_lines.
+    CONSTANTS:
+      lc_abap TYPE string VALUE 'abap',
+      lc_xml  TYPE string VALUE 'xml'.
 
     DATA: lo_highlighter TYPE REF TO lcl_syntax_highlighter,
           lt_diffs       TYPE lcl_diff=>ty_diffs_tt,
@@ -262,7 +265,8 @@ CLASS lcl_gui_page_diff IMPLEMENTATION.
           lv_lattr       TYPE string,
           lv_rattr       TYPE string,
           lv_highlight   TYPE abap_bool,
-          lv_insert_nav  TYPE abap_bool.
+          lv_insert_nav  TYPE abap_bool,
+          lv_extension   TYPE string.
 
     FIELD-SYMBOLS <ls_diff>  LIKE LINE OF lt_diffs.
 
@@ -271,7 +275,13 @@ CLASS lcl_gui_page_diff IMPLEMENTATION.
 
     lt_diffs = is_diff-o_diff->get( ).
 
-    lv_highlight = boolc( is_diff-filename CP '*.abap' ).
+    IF is_diff-filename CP '*.abap'.
+      lv_extension = lc_abap.
+      lv_highlight = abap_true.
+    ELSEIF is_diff-filename CP '*.xml'.
+      lv_extension = lc_xml.
+      lv_highlight = abap_true.
+    ENDIF.
 
     LOOP AT lt_diffs ASSIGNING <ls_diff>.
       IF <ls_diff>-short = abap_false.
