@@ -255,7 +255,7 @@ CLASS lcl_gui_page_diff IMPLEMENTATION.
 
   METHOD render_lines.
 
-    DATA: lo_highlighter TYPE REF TO lcl_code_highlighter,
+    DATA: lo_highlighter TYPE REF TO lcl_syntax_highlighter,
           lt_diffs       TYPE lcl_diff=>ty_diffs_tt,
           lv_local       TYPE string,
           lv_remote      TYPE string,
