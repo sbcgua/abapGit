@@ -14,6 +14,12 @@ CLASS ltcl_syntax_highlighter2 DEFINITION DEFERRED.
 CLASS lcl_syntax_highlighter DEFINITION FRIENDS ltcl_syntax_highlighter1 ltcl_syntax_highlighter2.
 
   PUBLIC SECTION.
+    CONSTANTS:
+      BEGIN OF c_extension,
+        abap TYPE string VALUE 'abap',  "#EC NOTEXT
+        xml  TYPE string VALUE 'xml',   "#EC NOTEXT
+      END OF c_extension.
+
     CLASS-METHODS:
       class_constructor,
       get_keywords RETURNING VALUE(rv_string) TYPE string.
@@ -21,6 +27,7 @@ CLASS lcl_syntax_highlighter DEFINITION FRIENDS ltcl_syntax_highlighter1 ltcl_sy
     METHODS:
       process_line
         IMPORTING iv_line        TYPE string
+                  iv_extension   TYPE string
         RETURNING VALUE(rv_line) TYPE string.
 
   PRIVATE SECTION.
@@ -29,6 +36,7 @@ CLASS lcl_syntax_highlighter DEFINITION FRIENDS ltcl_syntax_highlighter1 ltcl_sy
         keyword TYPE c VALUE 'K', "#EC NOTEXT
         text    TYPE c VALUE 'T', "#EC NOTEXT
         comment TYPE c VALUE 'C', "#EC NOTEXT
+        xml_tag TYPE c VALUE 'X', "#EC NOTEXT
         none    TYPE c VALUE 'N', "#EC NOTEXT
       END OF c_token.
 
@@ -53,8 +61,9 @@ CLASS lcl_syntax_highlighter DEFINITION FRIENDS ltcl_syntax_highlighter1 ltcl_sy
 
     TYPES:
       BEGIN OF ty_regex,
-        regex TYPE REF TO cl_abap_regex,
-        token TYPE char1,
+        regex     TYPE REF TO cl_abap_regex,
+        token     TYPE char1,
+        extension TYPE string,
       END OF ty_regex.
 
     CLASS-DATA:
@@ -62,6 +71,7 @@ CLASS lcl_syntax_highlighter DEFINITION FRIENDS ltcl_syntax_highlighter1 ltcl_sy
         comment TYPE string,
         text    TYPE string,
         keyword TYPE string,
+        xml_tag TYPE string,
       END OF c_regex.
 
     CLASS-DATA: mo_regex_table  TYPE TABLE OF ty_regex.
@@ -69,10 +79,16 @@ CLASS lcl_syntax_highlighter DEFINITION FRIENDS ltcl_syntax_highlighter1 ltcl_sy
     METHODS:
       parse_line
         IMPORTING iv_line           TYPE string
+                  iv_extension      TYPE string
         RETURNING VALUE(rt_matches) TYPE ty_match_tt.
 
     METHODS:
       order_matches
+        IMPORTING iv_line    TYPE string
+        CHANGING  ct_matches TYPE ty_match_tt.
+
+    METHODS:
+      order_matches_xml
         IMPORTING iv_line    TYPE string
         CHANGING  ct_matches TYPE ty_match_tt.
 
@@ -101,7 +117,8 @@ DEFINE _add_regex.
       pattern     = c_regex-&1
       ignore_case = abap_true.
 
-  ls_regex_table-token = c_token-&1.
+  ls_regex_table-token     = c_token-&1.
+  ls_regex_table-extension = &2.
   APPEND ls_regex_table TO mo_regex_table.
 
 END-OF-DEFINITION.
@@ -118,11 +135,13 @@ CLASS lcl_syntax_highlighter IMPLEMENTATION.
     c_regex-comment = '##|"|^\*'.                           "#EC NOTEXT
     c_regex-text    = '`|''|\||\{|\}'.                      "#EC NOTEXT
     c_regex-keyword = '&&|\b(' && get_keywords( ) && ')\b'. "#EC NOTEXT
+    c_regex-xml_tag = '(<*>)(</*>)'. "#EC NOTEXT
 
     " Initialize instances of regular expressions
-    _add_regex keyword.
-    _add_regex comment.
-    _add_regex text.
+    _add_regex keyword c_extension-abap.
+    _add_regex comment c_extension-abap.
+    _add_regex text    c_extension-abap.
+    _add_regex xml_tag c_extension-xml.
 
   ENDMETHOD.                    "class_constructor
 
@@ -139,7 +158,7 @@ CLASS lcl_syntax_highlighter IMPLEMENTATION.
       <result> TYPE match_result,
       <match>  TYPE ty_match.
 
-    LOOP AT mo_regex_table ASSIGNING <regex>.
+    LOOP AT mo_regex_table ASSIGNING <regex> WHERE extension = iv_extension.
       lo_regex   = <regex>-regex.
       lo_matcher = lo_regex->create_matcher( text = iv_line ).
       lt_result  = lo_matcher->find_all( ).
@@ -247,6 +266,10 @@ CLASS lcl_syntax_highlighter IMPLEMENTATION.
 
   ENDMETHOD.  " order_matches.
 
+  METHOD order_matches_xml.
+
+  ENDMETHOD.  " order_matches_xml.
+
   METHOD format_line.
 
     DATA:
@@ -299,10 +322,15 @@ CLASS lcl_syntax_highlighter IMPLEMENTATION.
       RETURN.
     ENDIF.
 
-    lt_matches = me->parse_line( iv_line ).
+    lt_matches = me->parse_line( iv_line = iv_line iv_extension = iv_extension ).
 
-    me->order_matches( EXPORTING iv_line    = iv_line
-                       CHANGING  ct_matches = lt_matches ).
+    IF iv_extension = c_extension-abap.
+      me->order_matches( EXPORTING iv_line    = iv_line
+                         CHANGING  ct_matches = lt_matches ).
+    ELSEIF iv_extension = c_extension-xml.
+      me->order_matches_xml( EXPORTING iv_line    = iv_line
+                             CHANGING  ct_matches = lt_matches ).
+    ENDIF.
 
     rv_line = me->format_line( iv_line    = iv_line
                                it_matches = lt_matches ).
@@ -467,9 +495,11 @@ CLASS ltcl_syntax_highlighter1 IMPLEMENTATION.
 
   METHOD test.
 
-    DATA: lt_matches_act TYPE lcl_syntax_highlighter=>ty_match_tt.
+    DATA:
+          lt_matches_act TYPE lcl_syntax_highlighter=>ty_match_tt,
+          lv_extension   TYPE string value 'abap'.    " @TODO
 
-    lt_matches_act = mo->parse_line( iv_line ).
+    lt_matches_act = mo->parse_line( iv_line = iv_line iv_extension = lv_extension ).
 
     SORT lt_matches_act BY offset.
 
@@ -740,9 +770,10 @@ CLASS ltcl_syntax_highlighter2 IMPLEMENTATION.
   METHOD format_line.
 
     DATA:
-      lv_line     TYPE string,
-      lv_line_act TYPE string,
-      lv_line_exp TYPE string.
+      lv_line      TYPE string,
+      lv_line_act  TYPE string,
+      lv_line_exp  TYPE string,
+      lv_extension TYPE string value 'abap'.  " @TODO
 
     lv_line = 'call function ''FM_NAME''. " Commented'.   "#EC NOTEXT
 
@@ -752,7 +783,7 @@ CLASS ltcl_syntax_highlighter2 IMPLEMENTATION.
       ' <span class="text">&#39;FM_NAME&#39;</span>.' &&  "#EC NOTEXT
       ' <span class="comment">&quot; Commented</span>'.   "#EC NOTEXT
 
-    lv_line_act = mo->process_line( lv_line ).
+    lv_line_act = mo->process_line( iv_line = lv_line iv_extension = lv_extension ).
 
     cl_abap_unit_assert=>assert_equals( exp = lv_line_exp
                                         act = lv_line_act
@@ -775,17 +806,18 @@ CLASS ltcl_syntax_highlighter2 IMPLEMENTATION.
 
   METHOD process_line.
     DATA:
-          lv_line_act TYPE string.
+          lv_line_act  TYPE string,
+          lv_extension TYPE string value 'abap'. " @TODO
 
     " Call the method with empty parameter and compare results
-    lv_line_act = mo->process_line( iv_line  = '' ).
+    lv_line_act = mo->process_line( iv_line  = '' iv_extension = lv_extension ).
 
     cl_abap_unit_assert=>assert_equals( act = lv_line_act
                                         exp = ''
                                         msg = 'Failure in method process_line.' ).  "#EC NOTEXT
 
     " Call the method with non-empty line and compare results
-    lv_line_act = mo->process_line( iv_line  = '* CALL FUNCTION' ).   "#EC NOTEXT
+    lv_line_act = mo->process_line( iv_line  = '* CALL FUNCTION' iv_extension = lv_extension ).   "#EC NOTEXT
 
     cl_abap_unit_assert=>assert_equals( act = lv_line_act
                                         exp = '<span class="comment">* CALL FUNCTION</span>'  "#EC NOTEXT

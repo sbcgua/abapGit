@@ -254,9 +254,6 @@ CLASS lcl_gui_page_diff IMPLEMENTATION.
   ENDMETHOD.  " render_beacon.
 
   METHOD render_lines.
-    CONSTANTS:
-      lc_abap TYPE string VALUE 'abap',
-      lc_xml  TYPE string VALUE 'xml'.
 
     DATA: lo_highlighter TYPE REF TO lcl_syntax_highlighter,
           lt_diffs       TYPE lcl_diff=>ty_diffs_tt,
@@ -264,7 +261,6 @@ CLASS lcl_gui_page_diff IMPLEMENTATION.
           lv_remote      TYPE string,
           lv_lattr       TYPE string,
           lv_rattr       TYPE string,
-          lv_highlight   TYPE abap_bool,
           lv_insert_nav  TYPE abap_bool,
           lv_extension   TYPE string.
 
@@ -276,11 +272,9 @@ CLASS lcl_gui_page_diff IMPLEMENTATION.
     lt_diffs = is_diff-o_diff->get( ).
 
     IF is_diff-filename CP '*.abap'.
-      lv_extension = lc_abap.
-      lv_highlight = abap_true.
+      lv_extension = lcl_syntax_highlighter=>c_extension-abap.
     ELSEIF is_diff-filename CP '*.xml'.
-      lv_extension = lc_xml.
-      lv_highlight = abap_true.
+      lv_extension = lcl_syntax_highlighter=>c_extension-xml.
     ENDIF.
 
     LOOP AT lt_diffs ASSIGNING <ls_diff>.
@@ -302,9 +296,9 @@ CLASS lcl_gui_page_diff IMPLEMENTATION.
         lv_remote = <ls_diff>-old.
       ENDIF.
 
-      IF lv_highlight = abap_true.
-        lv_local  = lo_highlighter->process_line( lv_local ).
-        lv_remote = lo_highlighter->process_line( lv_remote ).
+      IF lv_extension is not initial.
+        lv_local  = lo_highlighter->process_line( iv_line = lv_local  iv_extension = lv_extension ).
+        lv_remote = lo_highlighter->process_line( iv_line = lv_remote iv_extension = lv_extension ).
       ELSE.
         lv_local  = escape( val = lv_local format = cl_abap_format=>e_html_attr ).
         lv_remote = escape( val = lv_remote format = cl_abap_format=>e_html_attr ).
