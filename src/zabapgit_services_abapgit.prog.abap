@@ -33,7 +33,8 @@ CLASS lcl_services_abapgit DEFINITION FINAL.
   PRIVATE SECTION.
 
     CLASS-METHODS do_install
-      IMPORTING iv_text    TYPE c
+      IMPORTING iv_title   TYPE c
+                iv_text    TYPE c
                 iv_url     TYPE string
                 iv_package TYPE devclass
       RAISING lcx_exception.
@@ -66,20 +67,21 @@ CLASS lcl_services_abapgit IMPLEMENTATION.
 
   METHOD install_abapgit.
 
-    DATA lv_text            TYPE c LENGTH 100.
-    DATA lv_answer          TYPE c LENGTH 1.
+    CONSTANTS lc_title TYPE c LENGTH 40 VALUE 'Install abapGit'.
+    DATA lv_text       TYPE c LENGTH 100.
 
     IF is_installed( ) = abap_true.
       lv_text = 'Seems like abapGit package is already installed. No changes to be done'.
       lcl_popups=>popup_to_inform(
-        titlebar              = 'Install abapGit'
+        titlebar              = lc_title
         text_message          = lv_text ).
       RETURN.
     ENDIF.
 
-    lv_text = |Confirm to install current version of ABAPGit to package { c_package_abapgit } |.
+    lv_text = |Confirm to install current version of ABAPGit to package { c_package_abapgit }|.
 
-    do_install( iv_text    = lv_text
+    do_install( iv_title   = lc_title
+                iv_text    = lv_text
                 iv_url     = c_abapgit_url
                 iv_package = c_package_abapgit ).
 
@@ -87,20 +89,22 @@ CLASS lcl_services_abapgit IMPLEMENTATION.
 
   METHOD install_abapgit_pi.
 
-    DATA lv_text            TYPE c LENGTH 100.
+    CONSTANTS lc_title TYPE c LENGTH 40 VALUE 'Install abapGit plugins'.
+    DATA lv_text       TYPE c LENGTH 100.
 
     IF is_installed_pi( ) = abap_true.
       lv_text = 'Seems like abapGit plugins package is already installed. No changes to be done'.
       lcl_popups=>popup_to_inform(
-        titlebar              = 'Install abapGit'
+        titlebar              = lc_title
         text_message          = lv_text ).
       RETURN.
     ENDIF.
 
     lv_text = |Confirm to install current version ABAPGit plugins to package {
-               c_package_plugins } |.
+               c_package_plugins }|.
 
-    do_install( iv_text    = lv_text
+    do_install( iv_title   = lc_title
+                iv_text    = lv_text
                 iv_url     = c_plugins_url
                 iv_package = c_package_plugins ).
 
@@ -112,7 +116,7 @@ CLASS lcl_services_abapgit IMPLEMENTATION.
     DATA lv_answer          TYPE c LENGTH 1.
 
     lv_answer = lcl_popups=>popup_to_confirm(
-      titlebar              = 'Install abapGit plugins'
+      titlebar              = iv_title
       text_question         = iv_text
       text_button_1         = 'Continue'
       text_button_2         = 'Cancel'
@@ -147,9 +151,7 @@ CLASS lcl_services_abapgit IMPLEMENTATION.
 
     TRY.
         rv_installed = lcl_app=>repo_srv( )->is_repo_installed( c_abapgit_url ).
-        IF rv_installed = abap_false.
-          " TODO, how to check presence in the system ?
-        ENDIF.
+        " TODO, alternative checks for presence in the system
       CATCH lcx_exception.
         " cannot be installed anyway in this case, e.g. no connection
         rv_installed = abap_false.
@@ -161,9 +163,7 @@ CLASS lcl_services_abapgit IMPLEMENTATION.
 
     TRY.
         rv_installed = lcl_app=>repo_srv( )->is_repo_installed( c_plugins_url ).
-        IF rv_installed = abap_false.
-          " TODO, how to check presence in the system ?
-        ENDIF.
+        " TODO, alternative checks for presence in the system
       CATCH lcx_exception.
         " cannot be installed anyway in this case, e.g. no connection
         rv_installed = abap_false.
