@@ -18,6 +18,7 @@ CLASS lcl_syntax_highlighter DEFINITION ABSTRACT
   FRIENDS ltcl_syntax_highlighter1 ltcl_syntax_highlighter2.
 
   PUBLIC SECTION.
+
     CLASS-METHODS create
       IMPORTING iv_filename TYPE string
       RETURNING VALUE(ro_instance) TYPE REF TO lcl_syntax_highlighter.
@@ -27,6 +28,7 @@ CLASS lcl_syntax_highlighter DEFINITION ABSTRACT
         RETURNING VALUE(rv_line) TYPE string.
 
   PROTECTED SECTION.
+
     TYPES:
       BEGIN OF ty_match,
         token    TYPE char1,  " Type of matches
@@ -50,63 +52,33 @@ CLASS lcl_syntax_highlighter DEFINITION ABSTRACT
         style TYPE string,
       END OF ty_style_map.
 
-    CONSTANTS:
-      BEGIN OF c_css,
-        keyword  TYPE string VALUE 'keyword',                "#EC NOTEXT
-        text     TYPE string VALUE 'text',                   "#EC NOTEXT
-        comment  TYPE string VALUE 'comment',                "#EC NOTEXT
-        xml_tag  TYPE string VALUE 'xml_tag',                "#EC NOTEXT
-        attr     TYPE string VALUE 'attr',                   "#EC NOTEXT
-        attr_val TYPE string VALUE 'attr_val',               "#EC NOTEXT
-        none     TYPE string VALUE 'none',                   "#EC NOTEXT
-      END OF c_css.
-
-    CONSTANTS:
-      BEGIN OF c_token,
-        keyword  TYPE c VALUE 'K',                           "#EC NOTEXT
-        text     TYPE c VALUE 'T',                           "#EC NOTEXT
-        comment  TYPE c VALUE 'C',                           "#EC NOTEXT
-        xml_tag  TYPE c VALUE 'X',                           "#EC NOTEXT
-        attr     TYPE c VALUE 'A',                           "#EC NOTEXT
-        attr_val TYPE c VALUE 'V',                           "#EC NOTEXT
-        none     TYPE c VALUE 'N',                           "#EC NOTEXT
-      END OF c_token.
-
-    CLASS-DATA:
-      BEGIN OF c_regex,
-        comment  TYPE string,
-        text     TYPE string,
-        keyword  TYPE string,
-        xml_tag  TYPE string,
-        attr     TYPE string,
-        attr_val TYPE string,
-      END OF c_regex.
+    CONSTANTS c_token_none TYPE c VALUE 'N'.
 
     CLASS-DATA:
       mo_regex_table  TYPE TABLE OF ty_regex,
       mo_style_map    TYPE TABLE OF ty_style_map.
 
     METHODS parse_line
-        IMPORTING iv_line           TYPE string
-        RETURNING VALUE(rt_matches) TYPE ty_match_tt.
+      IMPORTING iv_line           TYPE string
+      RETURNING VALUE(rt_matches) TYPE ty_match_tt.
 
     METHODS order_matches ABSTRACT
-        IMPORTING iv_line    TYPE string
-        CHANGING  ct_matches TYPE ty_match_tt.
+      IMPORTING iv_line    TYPE string
+      CHANGING  ct_matches TYPE ty_match_tt.
 
     METHODS extend_matches
-        IMPORTING iv_line    TYPE string
-        CHANGING  ct_matches TYPE ty_match_tt.
+      IMPORTING iv_line    TYPE string
+      CHANGING  ct_matches TYPE ty_match_tt.
 
     METHODS format_line
-        IMPORTING iv_line        TYPE string
-                  it_matches     TYPE ty_match_tt
-        RETURNING VALUE(rv_line) TYPE string.
+      IMPORTING iv_line        TYPE string
+                it_matches     TYPE ty_match_tt
+      RETURNING VALUE(rv_line) TYPE string.
 
     METHODS apply_style
-        IMPORTING iv_line        TYPE string
-                  iv_class       TYPE string
-        RETURNING VALUE(rv_line) TYPE string.
+      IMPORTING iv_line        TYPE string
+                iv_class       TYPE string
+      RETURNING VALUE(rv_line) TYPE string.
 
 ENDCLASS.                       " lcl_syntax_highlighter DEFINITION
 
@@ -115,13 +87,38 @@ ENDCLASS.                       " lcl_syntax_highlighter DEFINITION
 *----------------------------------------------------------------------*
 *
 *----------------------------------------------------------------------*
-CLASS lcl_syntax_abap DEFINITION INHERITING FROM lcl_syntax_highlighter.
+CLASS lcl_syntax_abap DEFINITION INHERITING FROM lcl_syntax_highlighter FINAL.
 
   PUBLIC SECTION.
+
     CLASS-METHODS class_constructor.
 
+    CONSTANTS:
+      BEGIN OF c_css,
+        keyword  TYPE string VALUE 'keyword',                "#EC NOTEXT
+        text     TYPE string VALUE 'text',                   "#EC NOTEXT
+        comment  TYPE string VALUE 'comment',                "#EC NOTEXT
+      END OF c_css.
+
+    CONSTANTS:
+      BEGIN OF c_token,
+        keyword  TYPE c VALUE 'K',                           "#EC NOTEXT
+        text     TYPE c VALUE 'T',                           "#EC NOTEXT
+        comment  TYPE c VALUE 'C',                           "#EC NOTEXT
+      END OF c_token.
+
   PROTECTED SECTION.
-    CLASS-METHODS get_keywords RETURNING VALUE(rv_string) TYPE string.
+
+    CLASS-DATA:
+      BEGIN OF c_regex,
+        comment  TYPE string,
+        text     TYPE string,
+        keyword  TYPE string,
+      END OF c_regex.
+
+    CLASS-METHODS get_keywords
+      RETURNING VALUE(rv_string) TYPE string.
+
     METHODS order_matches REDEFINITION.
 
 ENDCLASS.                       " lcl_syntax_abap DEFINITION
@@ -131,11 +128,35 @@ ENDCLASS.                       " lcl_syntax_abap DEFINITION
 *----------------------------------------------------------------------*
 *
 *----------------------------------------------------------------------*
-CLASS lcl_syntax_xml DEFINITION INHERITING FROM lcl_syntax_highlighter.
+CLASS lcl_syntax_xml DEFINITION INHERITING FROM lcl_syntax_highlighter FINAL.
+
   PUBLIC SECTION.
+
+    CONSTANTS:
+      BEGIN OF c_css,
+        xml_tag  TYPE string VALUE 'xml_tag',                "#EC NOTEXT
+        attr     TYPE string VALUE 'attr',                   "#EC NOTEXT
+        attr_val TYPE string VALUE 'attr_val',               "#EC NOTEXT
+      END OF c_css.
+
+    CONSTANTS:
+      BEGIN OF c_token,
+        xml_tag  TYPE c VALUE 'X',                           "#EC NOTEXT
+        attr     TYPE c VALUE 'A',                           "#EC NOTEXT
+        attr_val TYPE c VALUE 'V',                           "#EC NOTEXT
+      END OF c_token.
+
     CLASS-METHODS class_constructor.
 
   PROTECTED SECTION.
+
+    CLASS-DATA:
+      BEGIN OF c_regex,
+        xml_tag  TYPE string,
+        attr     TYPE string,
+        attr_val TYPE string,
+      END OF c_regex.
+
     METHODS order_matches REDEFINITION.
 
 ENDCLASS.                       " lcl_syntax_xml DEFINITION
@@ -167,11 +188,13 @@ DEFINE _add_style_mapping.
   APPEND ls_style_map TO mo_style_map.
 
 END-OF-DEFINITION.           " _add_style_mapping
+
 *----------------------------------------------------------------------*
 *       CLASS lcl_syntax_highlighter IMPLEMENTATION
 *----------------------------------------------------------------------*
 * Implementation of syntax highligther for ABAP source code
 *----------------------------------------------------------------------*
+
 CLASS lcl_syntax_highlighter IMPLEMENTATION.
 
   METHOD create.
@@ -219,6 +242,7 @@ CLASS lcl_syntax_highlighter IMPLEMENTATION.
   ENDMETHOD.                    " parse_line
 
   METHOD extend_matches.
+
     DATA:
       lv_line_len   TYPE i,
       lv_last_pos   TYPE i VALUE 0,
@@ -229,11 +253,13 @@ CLASS lcl_syntax_highlighter IMPLEMENTATION.
 
     lv_line_len = strlen( iv_line ).
 
+    SORT ct_matches BY offset.
+
     " Add entries refering to parts of text that should not be formatted
     LOOP AT ct_matches ASSIGNING <match>.
       IF <match>-offset > lv_last_pos.
         lv_length = <match>-offset - lv_last_pos.
-        ls_match-token  = c_token-none.
+        ls_match-token  = c_token_none.
         ls_match-offset = lv_last_pos.
         ls_match-length = lv_length.
         INSERT ls_match INTO ct_matches INDEX sy-tabix.
@@ -244,7 +270,7 @@ CLASS lcl_syntax_highlighter IMPLEMENTATION.
     " Add remainder of the string
     IF lv_line_len > lv_last_pos.
       lv_length = lv_line_len - lv_last_pos.
-      ls_match-token  = c_token-none.
+      ls_match-token  = c_token_none.
       ls_match-offset = lv_last_pos.
       ls_match-length = lv_length.
       APPEND ls_match TO ct_matches.
@@ -321,6 +347,7 @@ ENDCLASS.                       " lcl_syntax_highlighter IMPLEMENTATION
 *----------------------------------------------------------------------*
 * Implementation of syntax highligther for XML source code
 *----------------------------------------------------------------------*
+
 CLASS lcl_syntax_abap IMPLEMENTATION.
 
   METHOD class_constructor.
@@ -443,6 +470,7 @@ CLASS lcl_syntax_abap IMPLEMENTATION.
       '|VARY|VARYING|VERIFICATION-MESSAGE|VERSION|VIA|VIEW|VISIBLE|WAIT|WARNING|WHEN|WHENEVER' &&
       '|WHERE|WHILE|WIDTH|WINDOW|WINDOWS|WITH|WITH-HEADING|WITHOUT|WITH-TITLE|WORD|WORK' &&
       '|WRITE|WRITER|X|XML|XOR|XSD|XSTRLEN|YELLOW|YES|YYMMDD|Z|ZERO|ZONE'.
+
   ENDMETHOD.                    " get_keywords.
 
   METHOD order_matches.
@@ -478,10 +506,12 @@ CLASS lcl_syntax_abap IMPLEMENTATION.
               CONTINUE.
             ENDIF.
           ENDIF.
+
         WHEN c_token-comment.
           <match>-length = lv_line_len - <match>-offset.
           DELETE ct_matches FROM lv_index + 1.
           CONTINUE.
+
         WHEN c_token-text.
           <match>-text_tag = substring( val = iv_line off = <match>-offset len = <match>-length ).
           IF lv_prev_token = c_token-text.
@@ -503,12 +533,15 @@ CLASS lcl_syntax_abap IMPLEMENTATION.
             DELETE ct_matches INDEX lv_index.
             CONTINUE.
           ENDIF.
+
       ENDCASE.
 
       lv_prev_token = <match>-token.
       ASSIGN <match> TO <prev>.
     ENDLOOP.
+
   ENDMETHOD.                    " order_matches.
+
 ENDCLASS.                       " lcl_syntax_abap IMPLEMENTATION
 
 *----------------------------------------------------------------------*
@@ -517,6 +550,7 @@ ENDCLASS.                       " lcl_syntax_abap IMPLEMENTATION
 *
 *----------------------------------------------------------------------*
 CLASS lcl_syntax_xml IMPLEMENTATION.
+
   METHOD class_constructor.
 
     DATA:
@@ -540,6 +574,7 @@ CLASS lcl_syntax_xml IMPLEMENTATION.
   ENDMETHOD.
 
   METHOD order_matches.
+
     DATA:
       lv_index      TYPE sy-tabix,
       lv_line_len   TYPE i,
@@ -582,12 +617,15 @@ CLASS lcl_syntax_xml IMPLEMENTATION.
             DELETE ct_matches INDEX lv_index.
             CONTINUE.
           ENDIF.
+
       ENDCASE.
 
       lv_prev_token = <match>-token.
       ASSIGN <match> TO <prev>.
     ENDLOOP.
+
   ENDMETHOD.                    " order_matches
+
 ENDCLASS.                       " lcl_syntax_xml IMPLEMENTATION
 
 *----------------------------------------------------------------------*
@@ -656,11 +694,9 @@ CLASS ltcl_syntax_highlighter1 IMPLEMENTATION.
 
   METHOD test.
 
-    DATA:
-          lt_matches_act TYPE lcl_syntax_highlighter=>ty_match_tt.
+    DATA lt_matches_act TYPE lcl_syntax_highlighter=>ty_match_tt.
 
-    mo =  lcl_syntax_highlighter=>create( iv_filename ).
-
+    mo             = lcl_syntax_highlighter=>create( iv_filename ).
     lt_matches_act = mo->parse_line( iv_line = iv_line ).
 
     SORT lt_matches_act BY offset.
@@ -676,8 +712,8 @@ CLASS ltcl_syntax_highlighter1 IMPLEMENTATION.
                                         act = lt_matches_act
                                         msg = | Error during ordering: { iv_line }| ).
 
-    mo->extend_matches( EXPORTING iv_line   = iv_line
-                       CHANGING  ct_matches = lt_matches_act ).
+    mo->extend_matches( EXPORTING iv_line    = iv_line
+                        CHANGING  ct_matches = lt_matches_act ).
 
     cl_abap_unit_assert=>assert_equals( exp = mt_after_extend
                                         act = lt_matches_act
@@ -995,6 +1031,7 @@ ENDCLASS.                       " ltcl_syntax_highlighter2
 *       CLASS ltcl_syntax_highlighter IMPLEMENTATION
 *----------------------------------------------------------------------*
 CLASS ltcl_syntax_highlighter2 IMPLEMENTATION.
+
   METHOD format_line.
 
     DATA:
@@ -1023,6 +1060,7 @@ CLASS ltcl_syntax_highlighter2 IMPLEMENTATION.
   ENDMETHOD.                    " format_line
 
   METHOD apply_style.
+
     DATA:
       lv_line_act TYPE string,
       lv_filename TYPE string VALUE 'file_name.abap'.       "#EC NOTEXT.
@@ -1032,14 +1070,16 @@ CLASS ltcl_syntax_highlighter2 IMPLEMENTATION.
 
     " Call the method and compare results
     lv_line_act = mo->apply_style( iv_line  = 'CALL FUNCTION' "#EC NOTEXT
-                                   iv_class = lcl_syntax_highlighter=>c_css-keyword ).
+                                   iv_class = lcl_syntax_abap=>c_css-keyword ).
 
     cl_abap_unit_assert=>assert_equals( act = lv_line_act
                                         exp = '<span class="keyword">CALL FUNCTION</span>' "#EC NOTEXT
                                         msg = 'Failure during applying of style.' ). "#EC NOTEXT
+
   ENDMETHOD.                    " apply_style
 
   METHOD process_line.
+
     DATA:
       lv_line_act TYPE string,
       lv_filename TYPE string VALUE 'file_name.abap'.       "#EC NOTEXT.
@@ -1060,6 +1100,7 @@ CLASS ltcl_syntax_highlighter2 IMPLEMENTATION.
     cl_abap_unit_assert=>assert_equals( act = lv_line_act
                                         exp = '<span class="comment">* CALL FUNCTION</span>' "#EC NOTEXT
                                         msg = 'Failure in method process_line.' ). "#EC NOTEXT
+
   ENDMETHOD.                    " process_line
 
 ENDCLASS.                       " ltcl_syntax_highlighter
