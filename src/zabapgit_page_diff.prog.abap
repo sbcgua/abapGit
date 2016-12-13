@@ -261,21 +261,14 @@ CLASS lcl_gui_page_diff IMPLEMENTATION.
           lv_remote      TYPE string,
           lv_lattr       TYPE string,
           lv_rattr       TYPE string,
-          lv_insert_nav  TYPE abap_bool,
-          lv_extension   TYPE string.
+          lv_insert_nav  TYPE abap_bool.
 
     FIELD-SYMBOLS <ls_diff>  LIKE LINE OF lt_diffs.
 
-    CREATE OBJECT lo_highlighter.
+    lo_highlighter = lcl_syntax_highlighter=>create( is_diff-filename ).
     CREATE OBJECT ro_html.
 
     lt_diffs = is_diff-o_diff->get( ).
-
-    IF is_diff-filename CP '*.abap'.
-      lv_extension = lcl_syntax_highlighter=>c_extension-abap.
-    ELSEIF is_diff-filename CP '*.xml'.
-      lv_extension = lcl_syntax_highlighter=>c_extension-xml.
-    ENDIF.
 
     LOOP AT lt_diffs ASSIGNING <ls_diff>.
       IF <ls_diff>-short = abap_false.
@@ -296,9 +289,9 @@ CLASS lcl_gui_page_diff IMPLEMENTATION.
         lv_remote = <ls_diff>-old.
       ENDIF.
 
-      IF lv_extension is not initial.
-        lv_local  = lo_highlighter->process_line( iv_line = lv_local  iv_extension = lv_extension ).
-        lv_remote = lo_highlighter->process_line( iv_line = lv_remote iv_extension = lv_extension ).
+      IF lo_highlighter IS BOUND.
+        lv_local  = lo_highlighter->process_line( lv_local ).
+        lv_remote = lo_highlighter->process_line( lv_remote ).
       ELSE.
         lv_local  = escape( val = lv_local format = cl_abap_format=>e_html_attr ).
         lv_remote = escape( val = lv_remote format = cl_abap_format=>e_html_attr ).
