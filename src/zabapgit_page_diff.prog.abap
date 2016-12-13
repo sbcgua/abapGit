@@ -353,6 +353,11 @@ CLASS lcl_gui_page_diff IMPLEMENTATION.
     ro_html->add( title( 'DIFF' ) ).
 
     LOOP AT mt_diff_files INTO ls_diff_file.
+      lcl_progress=>show( iv_key     = 'Diff'
+                          iv_current = sy-tabix
+                          iv_total   = lines( mt_diff_files )
+                          iv_text    = |Render Diff - { ls_diff_file-filename }| ).
+
       ro_html->add( render_diff( ls_diff_file ) ).
     ENDLOOP.
 
