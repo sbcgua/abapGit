@@ -5,8 +5,8 @@
 *&       Class lcl_syntax_highligher
 *&---------------------------------------------------------------------*
 
-CLASS ltcl_syntax_highlighter1 DEFINITION DEFERRED.
-CLASS ltcl_syntax_highlighter2 DEFINITION DEFERRED.
+CLASS ltcl_syntax_cases DEFINITION DEFERRED.
+CLASS ltcl_syntax_basic_logic DEFINITION DEFERRED.
 
 CLASS lcl_syntax_abap DEFINITION DEFERRED.
 CLASS lcl_syntax_xml DEFINITION DEFERRED.
@@ -15,7 +15,7 @@ CLASS lcl_syntax_xml DEFINITION DEFERRED.
 *       CLASS lcl_syntax_highlighter DEFINITION
 *----------------------------------------------------------------------*
 CLASS lcl_syntax_highlighter DEFINITION ABSTRACT
-  FRIENDS ltcl_syntax_highlighter1 ltcl_syntax_highlighter2.
+  FRIENDS ltcl_syntax_cases ltcl_syntax_basic_logic.
 
   PUBLIC SECTION.
 
@@ -41,22 +41,15 @@ CLASS lcl_syntax_highlighter DEFINITION ABSTRACT
       ty_match_tt  TYPE STANDARD TABLE OF ty_match WITH DEFAULT KEY.
 
     TYPES:
-      BEGIN OF ty_regex, "ty_rule
+      BEGIN OF ty_rule,
         regex     TYPE REF TO cl_abap_regex,
         token     TYPE char1,
-      END OF ty_regex.
-
-    TYPES:
-      BEGIN OF ty_style_map,
-        token TYPE char1,
-        style TYPE string,
-      END OF ty_style_map.
+        style     TYPE string,
+      END OF ty_rule.
 
     CONSTANTS c_token_none TYPE c VALUE '.'.
 
-    CLASS-DATA:
-      mo_regex_table  TYPE TABLE OF ty_regex,
-      mo_style_map    TYPE TABLE OF ty_style_map.
+    DATA mt_rules TYPE STANDARD TABLE OF ty_rule.
 
     METHODS parse_line
       IMPORTING iv_line           TYPE string
@@ -91,7 +84,8 @@ CLASS lcl_syntax_abap DEFINITION INHERITING FROM lcl_syntax_highlighter FINAL.
 
   PUBLIC SECTION.
 
-    CLASS-METHODS class_constructor.
+   CLASS-METHODS class_constructor.
+   METHODS constructor.
 
     CONSTANTS:
       BEGIN OF c_css,
@@ -110,6 +104,7 @@ CLASS lcl_syntax_abap DEFINITION INHERITING FROM lcl_syntax_highlighter FINAL.
   PROTECTED SECTION.
 
     CLASS-DATA:
+      c_keyword_regex TYPE REF TO cl_abap_regex, " Temporary
       BEGIN OF c_regex,
         comment  TYPE string,
         text     TYPE string,
@@ -132,6 +127,8 @@ CLASS lcl_syntax_xml DEFINITION INHERITING FROM lcl_syntax_highlighter FINAL.
 
   PUBLIC SECTION.
 
+    METHODS constructor.
+
     CONSTANTS:
       BEGIN OF c_css,
         xml_tag  TYPE string VALUE 'xml_tag',                "#EC NOTEXT
@@ -145,8 +142,6 @@ CLASS lcl_syntax_xml DEFINITION INHERITING FROM lcl_syntax_highlighter FINAL.
         attr     TYPE c VALUE 'A',                           "#EC NOTEXT
         attr_val TYPE c VALUE 'V',                           "#EC NOTEXT
       END OF c_token.
-
-    CLASS-METHODS class_constructor.
 
   PROTECTED SECTION.
 
@@ -165,29 +160,18 @@ ENDCLASS.                       " lcl_syntax_xml DEFINITION
 * Macros to fill table with a regular expressions to be parsed
 *----------------------------------------------------------------------*
 
-DEFINE _add_regex.
+DEFINE _add_rule.
 
-  CREATE OBJECT ls_regex_table-regex
+  CREATE OBJECT ls_rule-regex
     EXPORTING
       pattern     = c_regex-&1
       ignore_case = abap_true.
 
-  ls_regex_table-token     = c_token-&1.
-  APPEND ls_regex_table TO mo_regex_table.
+  ls_rule-token = c_token-&1.
+  ls_rule-style = c_css-&1.
+  APPEND ls_rule TO mt_rules.
 
-END-OF-DEFINITION.           " _add_regex
-
-*----------------------------------------------------------------------*
-* Macros to fill table with mapping of tokens against CSS-styles
-*----------------------------------------------------------------------*
-
-DEFINE _add_style_mapping.
-
-  ls_style_map-token = c_token-&1.
-  ls_style_map-style = c_css-&1.
-  APPEND ls_style_map TO mo_style_map.
-
-END-OF-DEFINITION.           " _add_style_mapping
+END-OF-DEFINITION.           " _add_rule
 
 *----------------------------------------------------------------------*
 *       CLASS lcl_syntax_highlighter IMPLEMENTATION
@@ -219,12 +203,12 @@ CLASS lcl_syntax_highlighter IMPLEMENTATION.
       ls_match   TYPE ty_match.
 
     FIELD-SYMBOLS:
-      <regex>  TYPE ty_regex,
+      <regex>  LIKE LINE OF mt_rules,
       <result> TYPE match_result,
       <match>  TYPE ty_match.
 
     " Process syntax-dependent regex table and find all matches
-    LOOP AT mo_regex_table ASSIGNING <regex>.
+    LOOP AT mt_rules ASSIGNING <regex>.
       lo_regex   = <regex>-regex.
       lo_matcher = lo_regex->create_matcher( text = iv_line ).
       lt_result  = lo_matcher->find_all( ).
@@ -281,25 +265,19 @@ CLASS lcl_syntax_highlighter IMPLEMENTATION.
   METHOD format_line.
 
     DATA:
-      lv_chunk     TYPE string,
-      lv_css_class TYPE string,
-      ls_style_map TYPE ty_style_map.
+      lv_chunk  TYPE string,
+      ls_rule   LIKE LINE OF mt_rules.
 
     FIELD-SYMBOLS <match> TYPE ty_match.
 
     LOOP AT it_matches ASSIGNING <match>.
       lv_chunk = substring( val = iv_line off = <match>-offset len = <match>-length ).
 
-      READ TABLE mo_style_map INTO ls_style_map WITH KEY token = <match>-token.
-
-      IF sy-subrc IS INITIAL.
-        lv_css_class = ls_style_map-style.
-      ELSE.
-        CLEAR: lv_css_class.
-      ENDIF.
+      CLEAR ls_rule. " Failed read equals no style
+      READ TABLE mt_rules INTO ls_rule WITH KEY token = <match>-token.
 
       lv_chunk = me->apply_style( iv_line  = lv_chunk
-                                  iv_class = lv_css_class ).
+                                  iv_class = ls_rule-style ).
 
       rv_line = rv_line && lv_chunk.
     ENDLOOP.
@@ -352,26 +330,34 @@ CLASS lcl_syntax_abap IMPLEMENTATION.
 
   METHOD class_constructor.
 
-    DATA:
-      ls_regex_table TYPE ty_regex,
-      ls_style_map   TYPE ty_style_map.
-
-    " Declare regular expressions' constants
-    c_regex-comment = '##|"|^\*'.                           "#EC NOTEXT
-    c_regex-text    = '`|''|\||\{|\}'.                      "#EC NOTEXT
-    c_regex-keyword = '&&|\b(' && get_keywords( ) && ')\b'. "#EC NOTEXT
-
-    " Initialize instances of regular expressions
-    _add_regex keyword.
-    _add_regex comment.
-    _add_regex text.
-
-    " Initialize mapping of tokens and CSS-styles
-    _add_style_mapping keyword.
-    _add_style_mapping comment.
-    _add_style_mapping text.
+    CREATE OBJECT c_keyword_regex
+      EXPORTING
+        pattern     = '&&|\b(' && get_keywords( ) && ')\b'
+        ignore_case = abap_true.
 
   ENDMETHOD.                    " class_constructor
+
+  METHOD constructor.
+
+    DATA ls_rule LIKE LINE OF mt_rules.
+
+    super->constructor( ).
+
+    " Declare regular expressions' constants
+    c_regex-comment = '##|"|^\*'.            "#EC NOTEXT
+    c_regex-text    = '`|''|\||\{|\}'.       "#EC NOTEXT
+
+    " Initialize instances of regular expression
+    _add_rule comment.
+    _add_rule text.
+
+    " Temporary
+    ls_rule-regex = c_keyword_regex.
+    ls_rule-token = c_token-keyword.
+    ls_rule-style = c_css-keyword.
+    APPEND ls_rule TO mt_rules.
+
+  ENDMETHOD.                    " constructor
 
   METHOD get_keywords.
 
@@ -453,7 +439,7 @@ CLASS lcl_syntax_abap IMPLEMENTATION.
       '|SAVING|SCALE_PRESERVING|SCALE_PRESERVING_SCIENTIFIC|SCAN|SCIENTIFIC|SCIENTIFIC_WITH_LEADING_ZERO' &&
       '|SCREEN|SCROLL|SCROLL-BOUNDARY|SCROLLING|SEARCH|SECONDARY|SECONDS|SECTION|SELECT|SELECTION' &&
       '|SELECTIONS|SELECTION-SCREEN|SELECTION-SET|SELECTION-SETS|SELECTION-TABLE|SELECT-OPTIONS' &&
-      '|SELECTOR|SELECTOR|SEND|SEPARATE|SEPARATED|SET|SHARED|SHIFT|SHORT|SHORTDUMP-ID|SIGN' &&
+      '|SELECTOR|SEND|SEPARATE|SEPARATED|SET|SHARED|SHIFT|SHORT|SHORTDUMP-ID|SIGN' &&
       '|SIGN_AS_POSTFIX|SIMPLE|SIN|SINGLE|SINH|SIZE|SKIP|SKIPPING|SMART|SOME|SORT|SORTABLE' &&
       '|SORTED|SOURCE|SPACE|SPECIFIED|SPLIT|SPOOL|SPOTS|SQL|SQLSCRIPT|SQRT|STABLE|STAMP' &&
       '|STANDARD|STARTING|START-OF-SELECTION|STATE|STATEMENT|STATEMENTS|STATIC|STATICS|STATUSINFO' &&
@@ -551,25 +537,20 @@ ENDCLASS.                       " lcl_syntax_abap IMPLEMENTATION
 *----------------------------------------------------------------------*
 CLASS lcl_syntax_xml IMPLEMENTATION.
 
-  METHOD class_constructor.
+  METHOD constructor.
 
-    DATA:
-      ls_regex_table TYPE ty_regex,
-      ls_style_map   TYPE ty_style_map.
+    DATA ls_rule LIKE LINE OF mt_rules.
 
-    c_regex-xml_tag  = '[<>]'.              "#EC NOTEXT
-    c_regex-attr     = '\s[a-z:]+\s*(?==)'. "#EC NOTEXT
-    c_regex-attr_val = '["''][^''"]+[''"]'. "#EC NOTEXT
+    super->constructor( ).
+
+    c_regex-xml_tag  = '[<>]'.                   "#EC NOTEXT
+    c_regex-attr     = '\s[-a-z:_0-9]+\s*(?==)'. "#EC NOTEXT
+    c_regex-attr_val = '["''][^''"]+[''"]'.      "#EC NOTEXT
 
     " Initialize instances of regular expressions
-    _add_regex xml_tag.
-    _add_regex attr.
-    _add_regex attr_val.
-
-    " Initialize mapping of tokens and CSS-styles
-    _add_style_mapping xml_tag.
-    _add_style_mapping attr.
-    _add_style_mapping attr_val.
+    _add_rule xml_tag.
+    _add_rule attr.
+    _add_rule attr_val.
 
   ENDMETHOD.
 
@@ -629,9 +610,9 @@ CLASS lcl_syntax_xml IMPLEMENTATION.
 ENDCLASS.                       " lcl_syntax_xml IMPLEMENTATION
 
 *----------------------------------------------------------------------*
-*       CLASS ltcl_syntax_highlighter1 definition
+*       CLASS ltcl_syntax_cases definition
 *----------------------------------------------------------------------*
-CLASS ltcl_syntax_highlighter1 DEFINITION FINAL
+CLASS ltcl_syntax_cases DEFINITION FINAL
   FOR TESTING RISK LEVEL HARMLESS DURATION SHORT.
 
   PRIVATE SECTION.
@@ -643,24 +624,28 @@ CLASS ltcl_syntax_highlighter1 DEFINITION FINAL
       ms_match        TYPE lcl_syntax_highlighter=>ty_match.
 
     METHODS:
-      setup,
-      test IMPORTING iv_line     TYPE string
-                     iv_filename TYPE string
-           RETURNING VALUE(ro_instance) TYPE REF TO lcl_syntax_highlighter,
-      test01 FOR TESTING,
-      test02 FOR TESTING,
-      test03 FOR TESTING,
-      test04 FOR TESTING,
-      test05 FOR TESTING,
-      test06 FOR TESTING,
-      test07 FOR TESTING,
-      test08 FOR TESTING.
+      do_test IMPORTING iv_line     TYPE string
+                        iv_filename TYPE string
+              RETURNING VALUE(ro_instance) TYPE REF TO lcl_syntax_highlighter,
+      test_abap_01 FOR TESTING,
+      test_abap_02 FOR TESTING,
+      test_abap_03 FOR TESTING,
+      test_abap_04 FOR TESTING,
+      test_abap_05 FOR TESTING,
+      test_abap_06 FOR TESTING,
+      test_abap_07 FOR TESTING,
+      test_abap_08 FOR TESTING,
+      test_xml_01  FOR TESTING,
+      test_xml_02  FOR TESTING,
+      test_xml_03  FOR TESTING,
+      test_xml_04  FOR TESTING,
+      test_xml_05  FOR TESTING.
 
-ENDCLASS.                       " ltcl_syntax_highlighter1
+ENDCLASS.                       " ltcl_syntax_cases
 *----------------------------------------------------------------------*
-*       CLASS ltcl_syntax_highlighter1 IMPLEMENTATION
+*       CLASS ltcl_syntax_cases IMPLEMENTATION
 *----------------------------------------------------------------------*
-CLASS ltcl_syntax_highlighter1 IMPLEMENTATION.
+CLASS ltcl_syntax_cases IMPLEMENTATION.
 
   DEFINE _generate_parse.
     ms_match-token    = &1.
@@ -685,13 +670,7 @@ CLASS ltcl_syntax_highlighter1 IMPLEMENTATION.
     append ms_match to mt_after_extend.
   END-OF-DEFINITION.           " _generate_extend
 
-  METHOD setup.
-    CLEAR mt_after_parse.
-    CLEAR mt_after_order.
-    CLEAR mt_after_extend.
-  ENDMETHOD.                    " setup
-
-  METHOD test.
+  METHOD do_test.
 
     DATA: lt_matches_act TYPE lcl_syntax_highlighter=>ty_match_tt,
           lo             TYPE REF TO lcl_syntax_highlighter.
@@ -725,10 +704,9 @@ CLASS ltcl_syntax_highlighter1 IMPLEMENTATION.
 ******************************************************
 * Test parsing and ordering of comments              *
 ******************************************************
-  METHOD test01.
+  METHOD test_abap_01.
 
-    DATA:
-      lv_line     TYPE string.
+    DATA lv_line TYPE string.
 
     lv_line = '* commented out line with key word data'.    "#EC NOTEXT
 
@@ -747,18 +725,16 @@ CLASS ltcl_syntax_highlighter1 IMPLEMENTATION.
     " Generate table with expected values after ordering
     _generate_extend 'C' 0  39 ''.
 
-    test( iv_line = lv_line iv_filename = '*.abap' ).
+    do_test( iv_line = lv_line iv_filename = '*.abap' ).
 
-  ENDMETHOD.                    "test01
+  ENDMETHOD.                    " test_abap_01
 
 ******************************************************
 * Test parsing and ordering of remainder of string   *
 ******************************************************
-  METHOD test02.
+  METHOD test_abap_02.
 
-    DATA:
-      lv_line TYPE string,
-      lv_filename TYPE string VALUE 'file_name.abap'.       "#EC NOTEXT
+    DATA lv_line TYPE string.
 
     lv_line = 'data: lv_var_name type string.'.             "#EC NOTEXT
 
@@ -776,18 +752,16 @@ CLASS ltcl_syntax_highlighter1 IMPLEMENTATION.
     _generate_extend 'K' 18 4  ''.
     _generate_extend '.' 22 8  ''.
 
-    test( iv_line = lv_line iv_filename = lv_filename ).
+    do_test( iv_line = lv_line iv_filename = '*.abap' ).
 
-  ENDMETHOD.                    "test02
+  ENDMETHOD.                    " test_abap_02
 
 ******************************************************
 * Test parsing and ordering of key words & texts     *
 ******************************************************
-  METHOD test03.
+  METHOD test_abap_03.
 
-    DATA:
-      lv_line TYPE string,
-      lv_filename TYPE string VALUE 'file_name.abap'.       "#EC NOTEXT
+    DATA lv_line TYPE string.
 
 
     lv_line = 'call function ''FM_NAME''. " Commented'.     "#EC NOTEXT
@@ -814,18 +788,16 @@ CLASS ltcl_syntax_highlighter1 IMPLEMENTATION.
     _generate_extend '.' 23 2  ''.
     _generate_extend 'C' 25 11 ''.
 
-    test( iv_line = lv_line iv_filename = lv_filename ).
+    do_test( iv_line = lv_line iv_filename = '*.abap' ).
 
-  ENDMETHOD.                    "test03
+  ENDMETHOD.                    " test_abap_03
 
 ******************************************************
 * Test parsing and ordering of key words in texts    *
 ******************************************************
-  METHOD test04.
+  METHOD test_abap_04.
 
-    DATA:
-      lv_line TYPE string,
-      lv_filename TYPE string VALUE 'file_name.abap'.       "#EC NOTEXT
+    DATA lv_line TYPE string.
 
     lv_line = 'constants: lc_var type string value ''simpletext data simpletext''.'. "#EC NOTEXT
 
@@ -853,18 +825,16 @@ CLASS ltcl_syntax_highlighter1 IMPLEMENTATION.
     _generate_extend 'T' 36 28 ''''.
     _generate_extend '.' 64 1  ''.
 
-    test( iv_line = lv_line iv_filename = lv_filename ).
+    do_test( iv_line = lv_line iv_filename = '*.abap' ).
 
-  ENDMETHOD.                    "test04
+  ENDMETHOD.                    " test_abap_04
 
 ******************************************************
 * Test parsing and ordering texts in curly brackets  *
 ******************************************************
-  METHOD test05.
+  METHOD test_abap_05.
 
-    DATA:
-      lv_line TYPE string,
-      lv_filename TYPE string VALUE 'file_name.abap'.       "#EC NOTEXT
+    DATA lv_line TYPE string.
 
     lv_line = 'a = |{ b }={ c }|.'.                         "#EC NOTEXT
 
@@ -894,18 +864,16 @@ CLASS ltcl_syntax_highlighter1 IMPLEMENTATION.
     _generate_extend 'T' 16 1  '}'.
     _generate_extend '.' 17 1  ''.
 
-    test( iv_line = lv_line iv_filename = lv_filename ).
+    do_test( iv_line = lv_line iv_filename = '*.abap' ).
 
-  ENDMETHOD.                    "test05
+  ENDMETHOD.                    " test_abap_05
 
 ******************************************************
 * Test parsing and ordering of texts                 *
 ******************************************************
-  METHOD test06.
+  METHOD test_abap_06.
 
-    DATA:
-      lv_line TYPE string,
-      lv_filename TYPE string VALUE 'file_name.abap'.       "#EC NOTEXT
+    DATA lv_line TYPE string.
 
     lv_line = 'lv_line = lc_constant && |XYZ { ''ab'' && |ac{ ''UU'' }| }|'. "#EC NOTEXT
 
@@ -953,18 +921,16 @@ CLASS ltcl_syntax_highlighter1 IMPLEMENTATION.
     _generate_extend '.' 52 2  ''.
     _generate_extend 'T' 54 1  '}'.
 
-    test( iv_line = lv_line iv_filename = lv_filename ).
+    do_test( iv_line = lv_line iv_filename = '*.abap' ).
 
-  ENDMETHOD.                    "test06
+  ENDMETHOD.                    " test_abap_06
 
 ********************************************************
 * Check that '*' in select statement is not a match    *
 ********************************************************
-  METHOD test07.
+  METHOD test_abap_07.
 
-    DATA:
-      lv_line TYPE string,
-      lv_filename TYPE string VALUE 'file_name.abap'.       "#EC NOTEXT
+    DATA lv_line TYPE string.
 
     lv_line = 'SELECT * FROM foo'.                          "#EC NOTEXT
 
@@ -976,24 +942,22 @@ CLASS ltcl_syntax_highlighter1 IMPLEMENTATION.
     _generate_order 'K' 0  6 ''.
     _generate_order 'K' 9  4 ''.
 
-    " Generate table with expected values after ordering
+    " Generate table with expected values after extending
     _generate_extend 'K' 0  6 ''.
     _generate_extend '.' 6  3 ''.
     _generate_extend 'K' 9  4 ''.
     _generate_extend '.' 13 4 ''.
 
-    test( iv_line = lv_line iv_filename = lv_filename ).
+    do_test( iv_line = lv_line iv_filename = '*.abap' ).
 
-  ENDMETHOD.                    "test07
+  ENDMETHOD.                    " test_abap_07
 
 ********************************************************
 * Test parsing and ordering of key words in structures *
 ********************************************************
-  METHOD test08.
+  METHOD test_abap_08.
 
-    DATA:
-      lv_line TYPE string,
-      lv_filename TYPE string VALUE 'file_name.abap'.       "#EC NOTEXT
+    DATA lv_line TYPE string.
 
     lv_line = 'lv_length = <match>-length.'.                "#EC NOTEXT
 
@@ -1001,47 +965,197 @@ CLASS ltcl_syntax_highlighter1 IMPLEMENTATION.
     _generate_parse 'K' 13 5.
     _generate_parse 'K' 20 6.
 
-    " Generate table with expected values after ordering
+    " Generate table with expected values after extending
     _generate_extend '.' 0  27 ''.
 
-    test( iv_line = lv_line iv_filename = lv_filename ).
+    do_test( iv_line = lv_line iv_filename = '*.abap' ).
 
-  ENDMETHOD.                    "test08
-ENDCLASS.                    " ltcl_syntax_highlighter1 IMPLEMENTATION
+  ENDMETHOD.                    " test_abap_08
+
+********************************************************
+* Test parsing and ordering of tags in xml             *
+********************************************************
+  METHOD test_xml_01.
+
+    DATA lv_line TYPE string.
+
+    lv_line = '<tag>Text</tag>'.    "#EC NOTEXT
+
+    " Generate table with expected values after parsing
+    _generate_parse 'X' 0  1.
+    _generate_parse 'X' 4  1.
+    _generate_parse 'X' 9  1.
+    _generate_parse 'X' 14 1.
+
+    " Generate table with expected values after ordering
+    _generate_order 'X' 0  5 '<'.
+    _generate_order 'X' 9  6 '<'.
+
+    " Generate table with expected values after extending
+    _generate_extend 'X' 0  5 '<'.
+    _generate_extend '.' 5  4 ''.
+    _generate_extend 'X' 9  6 '<'.
+
+    do_test( iv_line = lv_line iv_filename = '*.xml' ).
+
+  ENDMETHOD.                    " test_xml_01
+
+  METHOD test_xml_02.
+
+    DATA lv_line TYPE string.
+
+    lv_line = '<tag/>'.    "#EC NOTEXT
+
+    " Generate table with expected values after parsing
+    _generate_parse 'X' 0  1.
+    _generate_parse 'X' 5  1.
+
+    " Generate table with expected values after ordering
+    _generate_order 'X' 0  6 '<'.
+
+    " Generate table with expected values after extending
+    _generate_extend 'X' 0  6 '<'.
+
+    do_test( iv_line = lv_line iv_filename = '*.xml' ).
+
+  ENDMETHOD.                    " test_xml_02
+
+  METHOD test_xml_03.
+
+    DATA lv_line TYPE string.
+
+    lv_line = '<tag attribute="value"/>'.    "#EC NOTEXT
+
+    " Generate table with expected values after parsing
+    _generate_parse 'X' 0  1.
+    _generate_parse 'A' 4  10.
+    _generate_parse 'V' 15 7.
+    _generate_parse 'X' 23 1.
+
+    " Generate table with expected values after ordering
+    _generate_order 'X' 0  4 '<'.
+    _generate_order 'A' 4  10 ''.
+    _generate_order 'V' 15 7 ''.
+    _generate_order 'X' 22 2 '>'.
+
+    " Generate table with expected values after extending
+    _generate_extend 'X' 0  4 '<'.
+    _generate_extend 'A' 4  10 ''.
+    _generate_extend '.' 14 1 ''.
+    _generate_extend 'V' 15 7 ''.
+    _generate_extend 'X' 22 2 '>'.
+
+    do_test( iv_line = lv_line iv_filename = '*.xml' ).
+
+  ENDMETHOD.                    " test_xml_03
+
+    METHOD test_xml_04.
+
+    DATA lv_line TYPE string.
+
+    lv_line = '<?xml version="1.0"?>'.    "#EC NOTEXT
+
+    " Generate table with expected values after parsing
+    _generate_parse 'X' 0  1.
+    _generate_parse 'A' 5  8.
+    _generate_parse 'V' 14 5.
+    _generate_parse 'X' 20 1.
+
+    " Generate table with expected values after ordering
+    _generate_order 'X' 0  5 '<'.
+    _generate_order 'A' 5  8 ''.
+    _generate_order 'V' 14 5 ''.
+    _generate_order 'X' 19 2 '>'.
+
+    " Generate table with expected values after extending
+    _generate_extend 'X' 0  5 '<'.
+    _generate_extend 'A' 5  8 ''.
+    _generate_extend '.' 13 1 ''.
+    _generate_extend 'V' 14 5 ''.
+    _generate_extend 'X' 19 2 '>'.
+
+    do_test( iv_line = lv_line iv_filename = '*.xml' ).
+
+  ENDMETHOD.                    " test_xml_04
+
+    METHOD test_xml_05.
+
+    DATA lv_line TYPE string.
+
+    lv_line = '<ns:tag ns:a1="v1" ns:a2=''v2''>"text"</ns:tag>'.    "#EC NOTEXT
+
+    " Generate table with expected values after parsing
+    _generate_parse 'X' 0  1.
+    _generate_parse 'A' 7  6.
+    _generate_parse 'V' 14 4.
+    _generate_parse 'A' 18 6.
+    _generate_parse 'V' 25 4.
+    _generate_parse 'X' 29 1.
+    _generate_parse 'V' 30 6.
+    _generate_parse 'X' 36 1.
+    _generate_parse 'X' 44 1.
+
+    " Generate table with expected values after ordering
+    _generate_order 'X' 0  7 '<'.
+    _generate_order 'A' 7  6 ''.
+    _generate_order 'V' 14 4 ''.
+    _generate_order 'A' 18 6 ''.
+    _generate_order 'V' 25 4 ''.
+    _generate_order 'X' 29 1 '>'.
+    _generate_order 'X' 36 9 '<'.
+
+    " Generate table with expected values after extending
+    _generate_extend 'X' 0  7 '<'.
+    _generate_extend 'A' 7  6 ''.
+    _generate_extend '.' 13 1 ''.
+    _generate_extend 'V' 14 4 ''.
+    _generate_extend 'A' 18 6 ''.
+    _generate_extend '.' 24 1 ''.
+    _generate_extend 'V' 25 4 ''.
+    _generate_extend 'X' 29 1 '>'.
+    _generate_extend '.' 30 6 ''.
+    _generate_extend 'X' 36 9 '<'.
+
+    do_test( iv_line = lv_line iv_filename = '*.xml' ).
+
+  ENDMETHOD.                    " test_xml_05
+ENDCLASS.                       " ltcl_syntax_cases IMPLEMENTATION
 
 *----------------------------------------------------------------------*
-*       CLASS ltcl_syntax_highlighter2 DEFINITION
+*       CLASS ltcl_syntax_basic_logic DEFINITION
 *----------------------------------------------------------------------*
 *
 *----------------------------------------------------------------------*
-CLASS ltcl_syntax_highlighter2 DEFINITION FINAL
+CLASS ltcl_syntax_basic_logic DEFINITION FINAL
   FOR TESTING RISK LEVEL HARMLESS DURATION SHORT.
 
   PRIVATE SECTION.
 
     DATA mo TYPE REF TO lcl_syntax_highlighter.
 
-    METHODS: process_line  FOR TESTING.
-    METHODS: format_line   FOR TESTING.
-    METHODS: apply_style   FOR TESTING.
+    METHODS:
+      setup,
+      process_line  FOR TESTING,
+      format_line   FOR TESTING,
+      apply_style   FOR TESTING.
 
-ENDCLASS.                       " ltcl_syntax_highlighter2
+ENDCLASS.                       " ltcl_syntax_basic_logic
 
 *----------------------------------------------------------------------*
 *       CLASS ltcl_syntax_highlighter IMPLEMENTATION
 *----------------------------------------------------------------------*
-CLASS ltcl_syntax_highlighter2 IMPLEMENTATION.
+CLASS ltcl_syntax_basic_logic IMPLEMENTATION.
+
+  METHOD setup.
+    mo =  lcl_syntax_highlighter=>create( '*.abap' ).
+  ENDMETHOD.                    " setup
 
   METHOD format_line.
 
     DATA:
       lv_line     TYPE string,
       lv_line_act TYPE string,
-      lv_line_exp TYPE string,
-      lv_filename TYPE string VALUE 'file_name.abap'.       "#EC NOTEXT.
-
-    " Create syntax highlighter
-    mo =  lcl_syntax_highlighter=>create( lv_filename ).
+      lv_line_exp TYPE string.
 
     lv_line = 'call function ''FM_NAME''. " Commented'.     "#EC NOTEXT
 
@@ -1061,12 +1175,7 @@ CLASS ltcl_syntax_highlighter2 IMPLEMENTATION.
 
   METHOD apply_style.
 
-    DATA:
-      lv_line_act TYPE string,
-      lv_filename TYPE string VALUE 'file_name.abap'.       "#EC NOTEXT.
-
-    " Create syntax highlighter
-    mo =  lcl_syntax_highlighter=>create( '*.abap' ).
+    DATA lv_line_act TYPE string.
 
     " Call the method and compare results
     lv_line_act = mo->apply_style( iv_line  = 'CALL FUNCTION' "#EC NOTEXT
@@ -1080,11 +1189,7 @@ CLASS ltcl_syntax_highlighter2 IMPLEMENTATION.
 
   METHOD process_line.
 
-    DATA:
-      lv_line_act TYPE string.
-
-    " Create syntax highlighter
-    mo =  lcl_syntax_highlighter=>create( '*.abap' ).
+    DATA lv_line_act TYPE string.
 
     " Call the method with empty parameter and compare results
     lv_line_act = mo->process_line( iv_line  = '' ).
