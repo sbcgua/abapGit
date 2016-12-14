@@ -41,7 +41,7 @@ CLASS lcl_syntax_highlighter DEFINITION ABSTRACT
       ty_match_tt  TYPE STANDARD TABLE OF ty_match WITH DEFAULT KEY.
 
     TYPES:
-      BEGIN OF ty_regex,
+      BEGIN OF ty_regex, "ty_rule
         regex     TYPE REF TO cl_abap_regex,
         token     TYPE char1,
       END OF ty_regex.
@@ -52,7 +52,7 @@ CLASS lcl_syntax_highlighter DEFINITION ABSTRACT
         style TYPE string,
       END OF ty_style_map.
 
-    CONSTANTS c_token_none TYPE c VALUE 'N'.
+    CONSTANTS c_token_none TYPE c VALUE '.'.
 
     CLASS-DATA:
       mo_regex_table  TYPE TABLE OF ty_regex,
@@ -637,7 +637,6 @@ CLASS ltcl_syntax_highlighter1 DEFINITION FINAL
   PRIVATE SECTION.
 
     DATA:
-      mo              TYPE REF TO lcl_syntax_highlighter,
       mt_after_parse  TYPE lcl_syntax_highlighter=>ty_match_tt,
       mt_after_order  TYPE lcl_syntax_highlighter=>ty_match_tt,
       mt_after_extend TYPE lcl_syntax_highlighter=>ty_match_tt,
@@ -694,10 +693,12 @@ CLASS ltcl_syntax_highlighter1 IMPLEMENTATION.
 
   METHOD test.
 
-    DATA lt_matches_act TYPE lcl_syntax_highlighter=>ty_match_tt.
+    DATA: lt_matches_act TYPE lcl_syntax_highlighter=>ty_match_tt,
+          lo             TYPE REF TO lcl_syntax_highlighter.
 
-    mo             = lcl_syntax_highlighter=>create( iv_filename ).
-    lt_matches_act = mo->parse_line( iv_line = iv_line ).
+
+    lo             = lcl_syntax_highlighter=>create( iv_filename ).
+    lt_matches_act = lo->parse_line( iv_line = iv_line ).
 
     SORT lt_matches_act BY offset.
 
@@ -705,14 +706,14 @@ CLASS ltcl_syntax_highlighter1 IMPLEMENTATION.
                                         act = lt_matches_act
                                         msg = | Error during parsing: { iv_line }| ).
 
-    mo->order_matches( EXPORTING iv_line    = iv_line
+    lo->order_matches( EXPORTING iv_line    = iv_line
                        CHANGING  ct_matches = lt_matches_act ).
 
     cl_abap_unit_assert=>assert_equals( exp = mt_after_order
                                         act = lt_matches_act
                                         msg = | Error during ordering: { iv_line }| ).
 
-    mo->extend_matches( EXPORTING iv_line    = iv_line
+    lo->extend_matches( EXPORTING iv_line    = iv_line
                         CHANGING  ct_matches = lt_matches_act ).
 
     cl_abap_unit_assert=>assert_equals( exp = mt_after_extend
@@ -727,8 +728,7 @@ CLASS ltcl_syntax_highlighter1 IMPLEMENTATION.
   METHOD test01.
 
     DATA:
-      lv_line     TYPE string,
-      lv_filename TYPE string VALUE 'file_name.abap'.       "#EC NOTEXT
+      lv_line     TYPE string.
 
     lv_line = '* commented out line with key word data'.    "#EC NOTEXT
 
@@ -747,7 +747,7 @@ CLASS ltcl_syntax_highlighter1 IMPLEMENTATION.
     " Generate table with expected values after ordering
     _generate_extend 'C' 0  39 ''.
 
-    test( iv_line = lv_line iv_filename = lv_filename ).
+    test( iv_line = lv_line iv_filename = '*.abap' ).
 
   ENDMETHOD.                    "test01
 
@@ -772,9 +772,9 @@ CLASS ltcl_syntax_highlighter1 IMPLEMENTATION.
 
     " Generate table with expected values after extending
     _generate_extend 'K' 0  4  ''.
-    _generate_extend 'N' 4  14 ''.
+    _generate_extend '.' 4  14 ''.
     _generate_extend 'K' 18 4  ''.
-    _generate_extend 'N' 22 8  ''.
+    _generate_extend '.' 22 8  ''.
 
     test( iv_line = lv_line iv_filename = lv_filename ).
 
@@ -807,11 +807,11 @@ CLASS ltcl_syntax_highlighter1 IMPLEMENTATION.
 
     " Generate table with expected values after extending
     _generate_extend 'K' 0  4  ''.
-    _generate_extend 'N' 4  1  ''.
+    _generate_extend '.' 4  1  ''.
     _generate_extend 'K' 5  8  ''.
-    _generate_extend 'N' 13 1  ''.
+    _generate_extend '.' 13 1  ''.
     _generate_extend 'T' 14 9  ''''.
-    _generate_extend 'N' 23 2  ''.
+    _generate_extend '.' 23 2  ''.
     _generate_extend 'C' 25 11 ''.
 
     test( iv_line = lv_line iv_filename = lv_filename ).
@@ -845,13 +845,13 @@ CLASS ltcl_syntax_highlighter1 IMPLEMENTATION.
 
     " Generate table with expected values after ordering
     _generate_extend 'K' 0  9  ''.
-    _generate_extend 'N' 9  9  ''.
+    _generate_extend '.' 9  9  ''.
     _generate_extend 'K' 18 4  ''.
-    _generate_extend 'N' 22 8  ''.
+    _generate_extend '.' 22 8  ''.
     _generate_extend 'K' 30 5  ''.
-    _generate_extend 'N' 35 1  ''.
+    _generate_extend '.' 35 1  ''.
     _generate_extend 'T' 36 28 ''''.
-    _generate_extend 'N' 64 1  ''.
+    _generate_extend '.' 64 1  ''.
 
     test( iv_line = lv_line iv_filename = lv_filename ).
 
@@ -884,15 +884,15 @@ CLASS ltcl_syntax_highlighter1 IMPLEMENTATION.
     _generate_order 'T' 16 1  '}'.
 
     " Generate table with expected values after extending
-    _generate_extend 'N' 0  4  ''.
+    _generate_extend '.' 0  4  ''.
     _generate_extend 'T' 4  1  '|'.
-    _generate_extend 'N' 5  5  ''.
+    _generate_extend '.' 5  5  ''.
     _generate_extend 'T' 10 1  '}'.
-    _generate_extend 'N' 11 2  ''.
+    _generate_extend '.' 11 2  ''.
     _generate_extend 'K' 13 1  ''.
-    _generate_extend 'N' 14 2  ''.
+    _generate_extend '.' 14 2  ''.
     _generate_extend 'T' 16 1  '}'.
-    _generate_extend 'N' 17 1  ''.
+    _generate_extend '.' 17 1  ''.
 
     test( iv_line = lv_line iv_filename = lv_filename ).
 
@@ -936,21 +936,21 @@ CLASS ltcl_syntax_highlighter1 IMPLEMENTATION.
     _generate_order 'T' 54 1  '}'.
 
     " Generate table with expected values after extending
-    _generate_extend 'N' 00 22 ''.
+    _generate_extend '.' 00 22 ''.
     _generate_extend 'K' 22 2  ''.
-    _generate_extend 'N' 24 1  ''.
+    _generate_extend '.' 24 1  ''.
     _generate_extend 'T' 25 5  '|'.
-    _generate_extend 'N' 30 2  ''.
+    _generate_extend '.' 30 2  ''.
     _generate_extend 'T' 32 4  ''''.
-    _generate_extend 'N' 36 1  ''.
+    _generate_extend '.' 36 1  ''.
     _generate_extend 'K' 37 2  ''.
-    _generate_extend 'N' 39 1  ''.
+    _generate_extend '.' 39 1  ''.
     _generate_extend 'T' 40 3  '|'.
-    _generate_extend 'N' 43 2  ''.
+    _generate_extend '.' 43 2  ''.
     _generate_extend 'T' 45 4  ''''.
-    _generate_extend 'N' 49 2  ''.
+    _generate_extend '.' 49 2  ''.
     _generate_extend 'T' 51 1  '}'.
-    _generate_extend 'N' 52 2  ''.
+    _generate_extend '.' 52 2  ''.
     _generate_extend 'T' 54 1  '}'.
 
     test( iv_line = lv_line iv_filename = lv_filename ).
@@ -978,9 +978,9 @@ CLASS ltcl_syntax_highlighter1 IMPLEMENTATION.
 
     " Generate table with expected values after ordering
     _generate_extend 'K' 0  6 ''.
-    _generate_extend 'N' 6  3 ''.
+    _generate_extend '.' 6  3 ''.
     _generate_extend 'K' 9  4 ''.
-    _generate_extend 'N' 13 4 ''.
+    _generate_extend '.' 13 4 ''.
 
     test( iv_line = lv_line iv_filename = lv_filename ).
 
@@ -1002,7 +1002,7 @@ CLASS ltcl_syntax_highlighter1 IMPLEMENTATION.
     _generate_parse 'K' 20 6.
 
     " Generate table with expected values after ordering
-    _generate_extend 'N' 0  27 ''.
+    _generate_extend '.' 0  27 ''.
 
     test( iv_line = lv_line iv_filename = lv_filename ).
 
@@ -1066,7 +1066,7 @@ CLASS ltcl_syntax_highlighter2 IMPLEMENTATION.
       lv_filename TYPE string VALUE 'file_name.abap'.       "#EC NOTEXT.
 
     " Create syntax highlighter
-    mo =  lcl_syntax_highlighter=>create( lv_filename ).
+    mo =  lcl_syntax_highlighter=>create( '*.abap' ).
 
     " Call the method and compare results
     lv_line_act = mo->apply_style( iv_line  = 'CALL FUNCTION' "#EC NOTEXT
@@ -1081,11 +1081,10 @@ CLASS ltcl_syntax_highlighter2 IMPLEMENTATION.
   METHOD process_line.
 
     DATA:
-      lv_line_act TYPE string,
-      lv_filename TYPE string VALUE 'file_name.abap'.       "#EC NOTEXT.
+      lv_line_act TYPE string.
 
     " Create syntax highlighter
-    mo =  lcl_syntax_highlighter=>create( lv_filename ).
+    mo =  lcl_syntax_highlighter=>create( '*.abap' ).
 
     " Call the method with empty parameter and compare results
     lv_line_act = mo->process_line( iv_line  = '' ).
