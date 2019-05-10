@@ -4,16 +4,19 @@ CLASS zcl_abapgit_proxy_auth DEFINITION
   CREATE PUBLIC .
 
   PUBLIC SECTION.
-    CLASS-METHODS:
+    CLASS-METHODS
       run
         IMPORTING ii_client TYPE REF TO if_http_client
-        RAISING   zcx_abapgit_exception.
+        RAISING   zcx_abapgit_http_error.
 
+protected section.
   PRIVATE SECTION.
     CLASS-DATA: gv_username TYPE string,
                 gv_password TYPE string.
 
-    CLASS-METHODS: enter RAISING zcx_abapgit_exception.
+    CLASS-METHODS
+      enter
+        RAISING zcx_abapgit_http_error.
 
 ENDCLASS.
 
@@ -32,7 +35,7 @@ CLASS ZCL_ABAPGIT_PROXY_AUTH IMPLEMENTATION.
         cv_pass     = gv_password ).
 
     IF gv_username IS INITIAL OR gv_password IS INITIAL.
-      zcx_abapgit_exception=>raise( 'Proxy auth failed' ).
+      zcx_abapgit_http_error=>raise_http( 'Proxy auth failed' ).
     ENDIF.
 
   ENDMETHOD.
