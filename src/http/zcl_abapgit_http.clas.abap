@@ -26,9 +26,7 @@ CLASS zcl_abapgit_http DEFINITION
       IMPORTING
         !ii_client               TYPE REF TO if_http_client
       RETURNING
-        VALUE(rv_auth_requested) TYPE abap_bool
-      RAISING
-        zcx_abapgit_exception .
+        VALUE(rv_auth_requested) TYPE abap_bool.
     CLASS-METHODS is_local_system
       IMPORTING
         !iv_url        TYPE string
@@ -70,7 +68,7 @@ CLASS ZCL_ABAPGIT_HTTP IMPLEMENTATION.
         cv_pass         = lv_pass ).
 
     IF lv_user IS INITIAL.
-      zcx_abapgit_exception=>raise( 'HTTP 401, unauthorized' ).
+      zcx_abapgit_http_error=>raise_http( 'HTTP 401, unauthorized' ).
     ENDIF.
 
     IF lv_user <> lv_default_user.
@@ -163,7 +161,7 @@ CLASS ZCL_ABAPGIT_HTTP IMPLEMENTATION.
             lv_text = 'While creating HTTP Client'.         "#EC NOTEXT
 
         ENDCASE.
-        zcx_abapgit_exception=>raise( lv_text ).
+        zcx_abapgit_http_error=>raise_http( lv_text ).
       ENDIF.
 
     ENDIF.

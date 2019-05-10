@@ -11,22 +11,23 @@ CLASS zcl_abapgit_http_client DEFINITION PUBLIC CREATE PUBLIC.
       send_receive_close
         IMPORTING iv_data        TYPE xstring
         RETURNING VALUE(rv_data) TYPE xstring
-        RAISING   zcx_abapgit_exception,
+        RAISING   zcx_abapgit_http_error,
       get_cdata
         RETURNING VALUE(rv_value) TYPE string,
       check_http_200
-        RAISING zcx_abapgit_exception,
+        RAISING zcx_abapgit_http_error,
       check_smart_response
         IMPORTING iv_expected_content_type TYPE string
                   iv_content_regex         TYPE string
         RAISING   zcx_abapgit_exception,
       send_receive
-        RAISING zcx_abapgit_exception,
+        RAISING zcx_abapgit_http_error,
       set_headers
         IMPORTING iv_url     TYPE string
                   iv_service TYPE string
         RAISING   zcx_abapgit_exception.
 
+protected section.
   PRIVATE SECTION.
     DATA: mi_client TYPE REF TO if_http_client,
           mo_digest TYPE REF TO zcl_abapgit_http_digest.
@@ -35,7 +36,7 @@ ENDCLASS.
 
 
 
-CLASS zcl_abapgit_http_client IMPLEMENTATION.
+CLASS ZCL_ABAPGIT_HTTP_CLIENT IMPLEMENTATION.
 
 
   METHOD check_http_200.
@@ -50,18 +51,18 @@ CLASS zcl_abapgit_http_client IMPLEMENTATION.
       WHEN 200.
         RETURN.
       WHEN 302.
-        zcx_abapgit_exception=>raise( 'HTTP redirect, check URL' ).
+        zcx_abapgit_http_error=>raise_http( 'HTTP redirect, check URL' ).
       WHEN 401.
-        zcx_abapgit_exception=>raise( 'HTTP 401, unauthorized' ).
+        zcx_abapgit_http_error=>raise_http( 'HTTP 401, unauthorized' ).
       WHEN 403.
-        zcx_abapgit_exception=>raise( 'HTTP 403, forbidden' ).
+        zcx_abapgit_http_error=>raise_http( 'HTTP 403, forbidden' ).
       WHEN 404.
-        zcx_abapgit_exception=>raise( 'HTTP 404, not found' ).
+        zcx_abapgit_http_error=>raise_http( 'HTTP 404, not found' ).
       WHEN 415.
-        zcx_abapgit_exception=>raise( 'HTTP 415, unsupported media type' ).
+        zcx_abapgit_http_error=>raise_http( 'HTTP 415, unsupported media type' ).
       WHEN OTHERS.
         lv_text = mi_client->response->get_cdata( ).
-        zcx_abapgit_exception=>raise( |HTTP error code: { lv_code }, { lv_text }| ).
+        zcx_abapgit_http_error=>raise_http( |HTTP error code: { lv_code }, { lv_text }| ).
     ENDCASE.
 
   ENDMETHOD.
@@ -75,7 +76,7 @@ CLASS zcl_abapgit_http_client IMPLEMENTATION.
     IF iv_expected_content_type IS NOT INITIAL.
       lv_content_type = mi_client->response->get_content_type( ).
       IF lv_content_type <> iv_expected_content_type.
-        zcx_abapgit_exception=>raise( 'Wrong Content-Type sent by server - no fallback to the dumb protocol!' ).
+        zcx_abapgit_http_error=>raise_http( 'Wrong Content-Type sent by server - no fallback to the dumb protocol!' ).
       ENDIF.
     ENDIF.
 
@@ -83,7 +84,7 @@ CLASS zcl_abapgit_http_client IMPLEMENTATION.
       lv_data = mi_client->response->get_cdata( ).
       FIND REGEX iv_content_regex IN lv_data.
       IF sy-subrc <> 0.
-        zcx_abapgit_exception=>raise( 'Wrong Content sent by server' ).
+        zcx_abapgit_http_error=>raise_http( 'Wrong Content sent by server' ).
       ENDIF.
     ENDIF.
 
@@ -107,7 +108,7 @@ CLASS zcl_abapgit_http_client IMPLEMENTATION.
 
   METHOD send_receive.
 
-    DATA: lv_text    TYPE string,
+    DATA:
           lv_code    TYPE i,
           lv_message TYPE string.
 
@@ -131,9 +132,8 @@ CLASS zcl_abapgit_http_client IMPLEMENTATION.
           code    = lv_code
           message = lv_message ).
 
-      lv_text = |HTTP error { lv_code } occured: { lv_message }|.
+      zcx_abapgit_http_error=>raise_http( |HTTP error { lv_code } occured: { lv_message }| ).
 
-      zcx_abapgit_exception=>raise( lv_text ).
     ENDIF.
 
   ENDMETHOD.
