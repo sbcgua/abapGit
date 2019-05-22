@@ -28,69 +28,96 @@ CLASS zcl_abapgit_gui_view_repo DEFINITION
         zcx_abapgit_exception .
 
   PROTECTED SECTION.
-  PRIVATE SECTION.
+private section.
 
-    DATA: mo_repo         TYPE REF TO zcl_abapgit_repo,
-          mv_cur_dir      TYPE string,
-          mv_hide_files   TYPE abap_bool,
-          mv_max_lines    TYPE i,
-          mv_max_setting  TYPE i,
-          mv_show_folders TYPE abap_bool,
-          mv_changes_only TYPE abap_bool.
+  data MO_REPO type ref to ZCL_ABAPGIT_REPO .
+  data MV_CUR_DIR type STRING .
+  data MV_HIDE_FILES type ABAP_BOOL .
+  data MV_MAX_LINES type I .
+  data MV_MAX_SETTING type I .
+  data MV_SHOW_FOLDERS type ABAP_BOOL .
+  data MV_CHANGES_ONLY type ABAP_BOOL .
 
-    METHODS:
-      render_head_line
-        IMPORTING iv_lstate      TYPE char1
-                  iv_rstate      TYPE char1
-        RETURNING VALUE(ro_html) TYPE REF TO zcl_abapgit_html
-        RAISING   zcx_abapgit_exception,
-      build_head_menu
-        IMPORTING iv_lstate         TYPE char1
-                  iv_rstate         TYPE char1
-        RETURNING VALUE(ro_toolbar) TYPE REF TO zcl_abapgit_html_toolbar
-        RAISING   zcx_abapgit_exception,
-      build_grid_menu
-        RETURNING VALUE(ro_toolbar) TYPE REF TO zcl_abapgit_html_toolbar
-        RAISING   zcx_abapgit_exception,
-      render_item
-        IMPORTING is_item              TYPE zif_abapgit_definitions=>ty_repo_item
-                  iv_render_transports TYPE abap_bool
-        RETURNING VALUE(ro_html)       TYPE REF TO zcl_abapgit_html
-        RAISING   zcx_abapgit_exception,
-      render_item_files
-        IMPORTING is_item        TYPE zif_abapgit_definitions=>ty_repo_item
-        RETURNING VALUE(ro_html) TYPE REF TO zcl_abapgit_html,
-      render_item_command
-        IMPORTING is_item        TYPE zif_abapgit_definitions=>ty_repo_item
-        RETURNING VALUE(ro_html) TYPE REF TO zcl_abapgit_html,
-      get_item_class
-        IMPORTING is_item        TYPE zif_abapgit_definitions=>ty_repo_item
-        RETURNING VALUE(rv_html) TYPE string,
-      get_item_icon
-        IMPORTING is_item        TYPE zif_abapgit_definitions=>ty_repo_item
-        RETURNING VALUE(rv_html) TYPE string,
-      render_item_lock_column
-        IMPORTING is_item        TYPE zif_abapgit_definitions=>ty_repo_item
-        RETURNING VALUE(rv_html) TYPE string,
-      render_empty_package
-        RETURNING VALUE(rv_html) TYPE string,
-      render_parent_dir
-        RETURNING VALUE(ro_html) TYPE REF TO zcl_abapgit_html
-        RAISING   zcx_abapgit_exception.
-
-    METHODS:
-      build_obj_jump_link
-        IMPORTING is_item        TYPE zif_abapgit_definitions=>ty_repo_item
-        RETURNING VALUE(rv_html) TYPE string,
-      build_dir_jump_link
-        IMPORTING iv_path        TYPE string
-        RETURNING VALUE(rv_html) TYPE string,
-      build_inactive_object_code
-        IMPORTING is_item                      TYPE zif_abapgit_definitions=>ty_repo_item
-        RETURNING VALUE(rv_inactive_html_code) TYPE string,
-      open_in_master_language
-        RAISING zcx_abapgit_exception.
-
+  methods RENDER_HEAD_LINE
+    importing
+      !IV_LSTATE type CHAR1 optional
+      !IV_RSTATE type CHAR1 optional
+    returning
+      value(RO_HTML) type ref to ZCL_ABAPGIT_HTML
+    raising
+      ZCX_ABAPGIT_EXCEPTION .
+  methods BUILD_HEAD_MENU
+    importing
+      !IV_LSTATE type CHAR1
+      !IV_RSTATE type CHAR1
+    returning
+      value(RO_TOOLBAR) type ref to ZCL_ABAPGIT_HTML_TOOLBAR
+    raising
+      ZCX_ABAPGIT_EXCEPTION .
+  methods BUILD_GRID_MENU
+    returning
+      value(RO_TOOLBAR) type ref to ZCL_ABAPGIT_HTML_TOOLBAR
+    raising
+      ZCX_ABAPGIT_EXCEPTION .
+  methods RENDER_ITEM
+    importing
+      !IS_ITEM type ZIF_ABAPGIT_DEFINITIONS=>TY_REPO_ITEM
+      !IV_RENDER_TRANSPORTS type ABAP_BOOL
+    returning
+      value(RO_HTML) type ref to ZCL_ABAPGIT_HTML
+    raising
+      ZCX_ABAPGIT_EXCEPTION .
+  methods RENDER_ITEM_FILES
+    importing
+      !IS_ITEM type ZIF_ABAPGIT_DEFINITIONS=>TY_REPO_ITEM
+    returning
+      value(RO_HTML) type ref to ZCL_ABAPGIT_HTML .
+  methods RENDER_ITEM_COMMAND
+    importing
+      !IS_ITEM type ZIF_ABAPGIT_DEFINITIONS=>TY_REPO_ITEM
+    returning
+      value(RO_HTML) type ref to ZCL_ABAPGIT_HTML .
+  methods GET_ITEM_CLASS
+    importing
+      !IS_ITEM type ZIF_ABAPGIT_DEFINITIONS=>TY_REPO_ITEM
+    returning
+      value(RV_HTML) type STRING .
+  methods GET_ITEM_ICON
+    importing
+      !IS_ITEM type ZIF_ABAPGIT_DEFINITIONS=>TY_REPO_ITEM
+    returning
+      value(RV_HTML) type STRING .
+  methods RENDER_ITEM_LOCK_COLUMN
+    importing
+      !IS_ITEM type ZIF_ABAPGIT_DEFINITIONS=>TY_REPO_ITEM
+    returning
+      value(RV_HTML) type STRING .
+  methods RENDER_EMPTY_PACKAGE
+    returning
+      value(RV_HTML) type STRING .
+  methods RENDER_PARENT_DIR
+    returning
+      value(RO_HTML) type ref to ZCL_ABAPGIT_HTML
+    raising
+      ZCX_ABAPGIT_EXCEPTION .
+  methods BUILD_OBJ_JUMP_LINK
+    importing
+      !IS_ITEM type ZIF_ABAPGIT_DEFINITIONS=>TY_REPO_ITEM
+    returning
+      value(RV_HTML) type STRING .
+  methods BUILD_DIR_JUMP_LINK
+    importing
+      !IV_PATH type STRING
+    returning
+      value(RV_HTML) type STRING .
+  methods BUILD_INACTIVE_OBJECT_CODE
+    importing
+      !IS_ITEM type ZIF_ABAPGIT_DEFINITIONS=>TY_REPO_ITEM
+    returning
+      value(RV_INACTIVE_HTML_CODE) type STRING .
+  methods OPEN_IN_MASTER_LANGUAGE
+    raising
+      ZCX_ABAPGIT_EXCEPTION .
 ENDCLASS.
 
 
@@ -787,9 +814,14 @@ CLASS ZCL_ABAPGIT_GUI_VIEW_REPO IMPLEMENTATION.
 
         ro_html->add( '</div>' ).
 
+      CATCH zcx_abapgit_http_error INTO lx_error.
+        ro_html->add( render_head_line( ) ).
+        ro_html->add( zcl_abapgit_gui_chunk_lib=>render_error(
+          iv_error = |Remote fetch error, { lx_error->get_text( ) }| ) ).
       CATCH zcx_abapgit_exception INTO lx_error.
-        ro_html->add( render_head_line( iv_lstate = lv_lstate iv_rstate = lv_rstate ) ).
-        ro_html->add( zcl_abapgit_gui_chunk_lib=>render_error( ix_error = lx_error ) ).
+        ro_html->add( render_head_line( ) ).
+        ro_html->add( zcl_abapgit_gui_chunk_lib=>render_error(
+          ix_error = lx_error ) ).
     ENDTRY.
 
   ENDMETHOD.
