@@ -39,6 +39,15 @@ CLASS zcl_abapgit_repo_online DEFINITION
         VALUE(rt_objects) TYPE zif_abapgit_definitions=>ty_objects_tt
       RAISING
         zcx_abapgit_exception .
+    METHODS get_switched_origin
+      RETURNING
+        VALUE(rv_url) TYPE zif_abapgit_persistence=>ty_repo-switched_origin .
+    METHODS switch_origin
+      IMPORTING
+        !iv_url TYPE zif_abapgit_persistence=>ty_repo-url
+      RAISING
+        zcx_abapgit_exception .
+
 
     METHODS get_files_remote
         REDEFINITION .
@@ -128,6 +137,11 @@ CLASS ZCL_ABAPGIT_REPO_ONLINE IMPLEMENTATION.
   METHOD get_sha1_remote.
     fetch_remote( ).
     rv_sha1 = mv_branch.
+  ENDMETHOD.
+
+
+  METHOD get_switched_origin.
+    rv_url = ms_data-switched_origin.
   ENDMETHOD.
 
 
@@ -251,6 +265,37 @@ CLASS ZCL_ABAPGIT_REPO_ONLINE IMPLEMENTATION.
 
     reset_remote( ).
     set( iv_url = iv_url ).
+
+  ENDMETHOD.
+
+
+  METHOD switch_origin.
+
+    DATA lv_offs TYPE i.
+
+    IF iv_url IS INITIAL.
+      IF ms_data-switched_origin IS INITIAL.
+        RETURN.
+      ELSE.
+        lv_offs = find(
+          val = reverse( ms_data-switched_origin )
+          sub = '@' ).
+        IF lv_offs = -1.
+          zcx_abapgit_exception=>raise( 'Incorrect format of switched origin' ).
+        ENDIF.
+        lv_offs = strlen( ms_data-switched_origin ) - lv_offs.
+        set_url( substring( val = ms_data-switched_origin len = lv_offs ) ).
+        set_branch_name( substring( val = ms_data-switched_origin off = lv_offs + 1 ) ).
+        set( iv_switched_origin = '' ).
+      ENDIF.
+    ELSE.
+      IF ms_data-switched_origin IS INITIAL.
+        set( iv_switched_origin = ms_data-url && '@' && ms_data-branch_name ).
+        set_url( iv_url ).
+      ELSE.
+        zcx_abapgit_exception=>raise( 'Cannot switch origin twice' ).
+      ENDIF.
+    ENDIF.
 
   ENDMETHOD.
 
