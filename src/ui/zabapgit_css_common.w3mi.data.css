@@ -150,6 +150,7 @@ div.log .icon { padding-right: 6px; }
 /* REPOSITORY */
 div.repo {
   margin-top: 3px;
+  margin-bottom: 3px;
   padding: 0.5em 1em 0.5em 1em;
   position: relative;
 }
@@ -181,7 +182,8 @@ div.repo {
   font-size: 8pt;
   padding: 4px 2px 3px 2px;
 }
-.repo_attr span.branch {
+
+span.branch {
   padding: 2px 4px;
   border: 1px solid;
   border-radius: 4px;
@@ -915,7 +917,7 @@ table.commit tr .title {
 .repo-overview { font-size: smaller; }
 .repo-overview tbody td { height: 2em; }
 .ro-detail { display: none; }
-.ro-action { width: 190px; }
+.ro-action { width: 260px; }
 .ro-go { font-size: 150%; }
 
 /* Branch Overview Page */
@@ -958,7 +960,7 @@ table.commit tr .title {
 
 .floating-button {
   position: fixed;
-  top: 6em;
+  top: 8em;
   right: 2.8em;
   padding: 1em 1.8em;
   border-radius: 4px;

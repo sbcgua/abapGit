@@ -66,7 +66,7 @@ CLASS zcl_abapgit_gui_page_main IMPLEMENTATION.
   METHOD constructor.
     super->constructor( ).
     ms_control-page_menu  = build_main_menu( ).
-    ms_control-page_title = 'REPOSITORY LIST'.
+    ms_control-page_title = 'Repository List'.
   ENDMETHOD.
 
 
@@ -128,6 +128,14 @@ CLASS zcl_abapgit_gui_page_main IMPLEMENTATION.
       WHEN zif_abapgit_definitions=>c_action-go_patch.
 
         ei_page = get_patch_page( iv_getdata ).
+        ev_state = zcl_abapgit_gui=>c_event_state-new_page.
+
+      WHEN zif_abapgit_definitions=>c_action-repo_settings.
+
+        lv_key = iv_getdata.
+        CREATE OBJECT ei_page TYPE zcl_abapgit_gui_page_repo_sett
+          EXPORTING
+            io_repo = zcl_abapgit_repo_srv=>get_instance( )->get( lv_key ).
         ev_state = zcl_abapgit_gui=>c_event_state-new_page.
 
       WHEN OTHERS.

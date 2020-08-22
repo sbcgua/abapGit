@@ -24,9 +24,6 @@ CLASS zcl_abapgit_html DEFINITION
     CONSTANTS c_indent_size TYPE i VALUE 2 ##NO_TEXT.
 
     CLASS-METHODS class_constructor .
-    CLASS-METHODS create
-      RETURNING
-        VALUE(ro_html) TYPE REF TO zcl_abapgit_html .
   PROTECTED SECTION.
   PRIVATE SECTION.
 
@@ -201,11 +198,6 @@ CLASS ZCL_ABAPGIT_HTML IMPLEMENTATION.
   ENDMETHOD.
 
 
-  METHOD create.
-    CREATE OBJECT ro_html.
-  ENDMETHOD.
-
-
   METHOD icon.
 
     DATA: lv_hint       TYPE string,
@@ -371,7 +363,7 @@ CLASS ZCL_ABAPGIT_HTML IMPLEMENTATION.
     add( icon( iv_name    = iv_name
                iv_class   = iv_class
                iv_hint    = iv_hint
-               iv_onclick = iv_onclick  ) ).
+               iv_onclick = iv_onclick ) ).
 
   ENDMETHOD.
 

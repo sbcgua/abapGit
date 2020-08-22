@@ -150,7 +150,7 @@ ENDCLASS.
 
 
 
-CLASS zcl_abapgit_gui_chunk_lib IMPLEMENTATION.
+CLASS ZCL_ABAPGIT_GUI_CHUNK_LIB IMPLEMENTATION.
 
 
   METHOD advanced_submenu.
@@ -158,22 +158,22 @@ CLASS zcl_abapgit_gui_chunk_lib IMPLEMENTATION.
     CREATE OBJECT ro_menu.
 
     ro_menu->add(
-      iv_txt = 'Database util'
+      iv_txt = 'Database Utility'
       iv_act = zif_abapgit_definitions=>c_action-go_db
     )->add(
-      iv_txt = 'Package to zip'
+      iv_txt = 'Package to Zip'
       iv_act = zif_abapgit_definitions=>c_action-zip_package
     )->add(
-      iv_txt = 'Transport to zip'
+      iv_txt = 'Transport to Zip'
       iv_act = zif_abapgit_definitions=>c_action-zip_transport
     )->add(
-      iv_txt = 'Object to files'
+      iv_txt = 'Object to Files'
       iv_act = zif_abapgit_definitions=>c_action-zip_object
     )->add(
-      iv_txt = 'Test changed by'
+      iv_txt = 'Test Changed by'
       iv_act = zif_abapgit_definitions=>c_action-changed_by
     )->add(
-      iv_txt = 'Debug info'
+      iv_txt = 'Debug Info'
       iv_act = zif_abapgit_definitions=>c_action-go_debuginfo
     )->add(
       iv_txt = 'Settings'
@@ -572,11 +572,10 @@ CLASS zcl_abapgit_gui_chunk_lib IMPLEMENTATION.
   METHOD render_order_by_header_cells.
 
     DATA:
-      lt_colspec   TYPE zif_abapgit_definitions=>tty_col_spec,
       lv_tmp       TYPE string,
       lv_disp_name TYPE string.
 
-    FIELD-SYMBOLS <ls_col> LIKE LINE OF lt_colspec.
+    FIELD-SYMBOLS <ls_col> LIKE LINE OF it_col_spec.
 
     CREATE OBJECT ro_html.
 
@@ -641,7 +640,7 @@ CLASS zcl_abapgit_gui_chunk_lib IMPLEMENTATION.
     lt_repo_list = zcl_abapgit_persist_factory=>get_repo( )->list( ).
     lv_size = lines( lt_repo_list ).
 
-    ri_html = zcl_abapgit_html=>create( ).
+    CREATE OBJECT ri_html TYPE zcl_abapgit_html.
 
     ri_html->add( 'var repoCatalog = [' ). " Maybe separate this into another method if needed in more places
     LOOP AT lt_repo_list ASSIGNING <ls_repo>.
@@ -781,14 +780,6 @@ CLASS zcl_abapgit_gui_chunk_lib IMPLEMENTATION.
   ENDMETHOD.
 
 
-  METHOD render_warning_banner.
-
-    CREATE OBJECT ro_html.
-    ro_html->add( '<div class="dummydiv warning">' ).
-    ro_html->add( |{ zcl_abapgit_html=>icon( 'exclamation-triangle/yellow' ) }| && | { iv_text }| ).
-    ro_html->add( '</div>' ).
-
-  ENDMETHOD.
   METHOD render_repo_top_commit_hash.
 
     DATA: lv_commit_hash       TYPE zif_abapgit_definitions=>ty_sha1,
@@ -813,9 +804,18 @@ CLASS zcl_abapgit_gui_chunk_lib IMPLEMENTATION.
                                 && lv_display_url
                         iv_class = |url| ).
       CATCH zcx_abapgit_exception.
-        iv_html->add( |<span class="url">{ lv_icon_commit }{ lv_commit_short_hash }</span>|  ).
+        iv_html->add( |<span class="url">{ lv_icon_commit }{ lv_commit_short_hash }</span>| ).
     ENDTRY.
 
   ENDMETHOD.
 
+
+  METHOD render_warning_banner.
+
+    CREATE OBJECT ro_html.
+    ro_html->add( '<div class="dummydiv warning">' ).
+    ro_html->add( |{ zcl_abapgit_html=>icon( 'exclamation-triangle/yellow' ) }| && | { iv_text }| ).
+    ro_html->add( '</div>' ).
+
+  ENDMETHOD.
 ENDCLASS.
