@@ -68,14 +68,13 @@ CLASS zcl_abapgit_repo DEFINITION
     METHODS deserialize
       IMPORTING
         !is_checks TYPE zif_abapgit_definitions=>ty_deserialize_checks
-        !ii_log    TYPE REF TO zif_abapgit_log
+      RETURNING
+        VALUE(ri_log) TYPE REF TO zcl_abapgit_log
       RAISING
         zcx_abapgit_exception .
     METHODS refresh
       IMPORTING
         !iv_drop_cache TYPE abap_bool DEFAULT abap_false
-        !iv_drop_log   TYPE abap_bool DEFAULT abap_true
-          PREFERRED PARAMETER iv_drop_cache
       RAISING
         zcx_abapgit_exception .
     METHODS update_local_checksums
@@ -123,14 +122,6 @@ CLASS zcl_abapgit_repo DEFINITION
         !iv_offline TYPE abap_bool
       RAISING
         zcx_abapgit_exception .
-    METHODS create_new_log
-      IMPORTING
-        !iv_title     TYPE string OPTIONAL
-      RETURNING
-        VALUE(ri_log) TYPE REF TO zif_abapgit_log .
-    METHODS get_log
-      RETURNING
-        VALUE(ri_log) TYPE REF TO zif_abapgit_log .
     METHODS refresh_local_object
       IMPORTING
         !iv_obj_type TYPE tadir-object
@@ -308,16 +299,6 @@ CLASS zcl_abapgit_repo IMPLEMENTATION.
   ENDMETHOD.
 
 
-  METHOD create_new_log.
-
-    CREATE OBJECT mi_log TYPE zcl_abapgit_log.
-    mi_log->set_title( iv_title ).
-
-    ri_log = mi_log.
-
-  ENDMETHOD.
-
-
   METHOD delete_checks.
 
     DATA: li_package TYPE REF TO zif_abapgit_sap_package.
@@ -333,6 +314,8 @@ CLASS zcl_abapgit_repo IMPLEMENTATION.
     DATA: lt_updated_files TYPE zif_abapgit_definitions=>ty_file_signatures_tt,
           lt_result        TYPE zif_abapgit_data_deserializer=>ty_results,
           lx_error         TYPE REF TO zcx_abapgit_exception.
+
+    CREATE OBJECT ri_log TYPE zcl_abapgit_log EXPORTING iv_title = 'Deserialization log'.
 
     find_remote_dot_abapgit( ).
     find_remote_dot_apack( ).
@@ -357,7 +340,7 @@ CLASS zcl_abapgit_repo IMPLEMENTATION.
         lt_updated_files = zcl_abapgit_objects=>deserialize(
             io_repo   = me
             is_checks = is_checks
-            ii_log    = ii_log ).
+            ii_log    = ri_log ).
       CATCH zcx_abapgit_exception INTO lx_error.
 * ensure to reset default transport request task
         zcl_abapgit_default_transport=>get_instance( )->reset( ).
@@ -549,11 +532,6 @@ CLASS zcl_abapgit_repo IMPLEMENTATION.
   ENDMETHOD.
 
 
-  METHOD get_log.
-    ri_log = mi_log.
-  ENDMETHOD.
-
-
   METHOD get_name.
 
     rv_name = ms_data-local_settings-display_name.
@@ -656,10 +634,6 @@ CLASS zcl_abapgit_repo IMPLEMENTATION.
 
     mv_request_local_refresh = abap_true.
     reset_remote( ).
-
-    IF iv_drop_log = abap_true.
-      CLEAR mi_log.
-    ENDIF.
 
     IF iv_drop_cache = abap_true.
       CLEAR mt_local.

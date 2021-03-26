@@ -25,8 +25,6 @@ CLASS zcl_abapgit_services_repo DEFINITION
     CLASS-METHODS purge
       IMPORTING
         !iv_key       TYPE zif_abapgit_persistence=>ty_repo-key
-      RETURNING
-        VALUE(ri_log) TYPE REF TO zif_abapgit_log
       RAISING
         zcx_abapgit_exception .
     CLASS-METHODS new_offline
@@ -122,6 +120,7 @@ CLASS ZCL_ABAPGIT_SERVICES_REPO IMPLEMENTATION.
           lt_requirements TYPE zif_abapgit_dot_abapgit=>ty_requirement_tt,
           lt_dependencies TYPE zif_abapgit_apack_definitions=>ty_dependencies.
 
+    DATA li_log TYPE REF TO zif_abapgit_log.
 
 * find troublesome objects
     ls_checks = io_repo->deserialize_checks( ).
@@ -152,8 +151,11 @@ CLASS ZCL_ABAPGIT_SERVICES_REPO IMPLEMENTATION.
     ENDTRY.
 
 * and pass decisions to deserialize
-    io_repo->deserialize( is_checks = ls_checks
-                          ii_log    = io_repo->create_new_log( 'Pull Log' ) ).
+    li_log = io_repo->deserialize( is_checks = ls_checks ).
+
+    IF li_log->count( ) > 0.
+      zcl_abapgit_log_viewer=>show_log( li_log ).
+    ENDIF.
 
   ENDMETHOD.
 
@@ -305,6 +307,7 @@ CLASS ZCL_ABAPGIT_SERVICES_REPO IMPLEMENTATION.
   METHOD purge.
 
     DATA: lt_tadir     TYPE zif_abapgit_definitions=>ty_tadir_tt,
+          lo_error     TYPE REF TO zcx_abapgit_exception,
           lv_answer    TYPE c LENGTH 1,
           lo_repo      TYPE REF TO zcl_abapgit_repo,
           lv_package   TYPE devclass,
@@ -312,7 +315,6 @@ CLASS ZCL_ABAPGIT_SERVICES_REPO IMPLEMENTATION.
           ls_checks    TYPE zif_abapgit_definitions=>ty_delete_checks,
           lv_repo_name TYPE string,
           lv_message   TYPE string.
-
 
     lo_repo = zcl_abapgit_repo_srv=>get_instance( )->get( iv_key ).
     lv_repo_name = lo_repo->get_name( ).
@@ -347,16 +349,16 @@ CLASS ZCL_ABAPGIT_SERVICES_REPO IMPLEMENTATION.
                                         )->popup_transport_request( ls_checks-transport-type ).
     ENDIF.
 
-    ri_log = zcl_abapgit_repo_srv=>get_instance( )->purge(
-      io_repo   = lo_repo
-      is_checks = ls_checks ).
+    TRY.
+        zcl_abapgit_repo_srv=>get_instance( )->purge(
+          io_repo   = lo_repo
+          is_checks = ls_checks ).
+      CATCH zcx_abapgit_exception INTO lo_error.
+        lo_repo->refresh( ). " To see the differences after update
+        RAISE EXCEPTION lo_error.
+    ENDTRY.
 
     COMMIT WORK.
-
-    IF ri_log IS BOUND AND ri_log->count( ) > 0.
-      zcl_abapgit_log_viewer=>show_log( ri_log ).
-      RETURN.
-    ENDIF.
 
     lv_message = |Repository { lv_repo_name } successfully uninstalled from Package { lv_package }. |.
     MESSAGE lv_message TYPE 'S'.
