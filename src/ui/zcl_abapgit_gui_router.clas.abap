@@ -127,7 +127,7 @@ ENDCLASS.
 
 
 
-CLASS zcl_abapgit_gui_router IMPLEMENTATION.
+CLASS ZCL_ABAPGIT_GUI_ROUTER IMPLEMENTATION.
 
 
   METHOD abapgit_services_actions.
@@ -542,8 +542,7 @@ CLASS zcl_abapgit_gui_router IMPLEMENTATION.
 
     DATA:
       lv_key  TYPE zif_abapgit_persistence=>ty_repo-key,
-      lo_repo TYPE REF TO zcl_abapgit_repo,
-      li_log  TYPE REF TO zif_abapgit_log.
+      lo_repo TYPE REF TO zcl_abapgit_repo.
 
     lv_key = ii_event->query( )->get( 'KEY' ).
     IF lv_key IS NOT INITIAL.
@@ -605,9 +604,8 @@ CLASS zcl_abapgit_gui_router IMPLEMENTATION.
       WHEN zif_abapgit_definitions=>c_action-repo_infos.                      " Repo infos
         rs_handled-page  = zcl_abapgit_gui_page_sett_info=>create( lo_repo ).
         rs_handled-state = get_state_settings( ii_event ).
-      WHEN zif_abapgit_definitions=>c_action-repo_log.                        " Repo log
-        li_log = lo_repo->get_log( ).
-        zcl_abapgit_log_viewer=>show_log( li_log ).
+      WHEN zif_abapgit_definitions=>c_action-show_last_log.                   " Show last log
+        zcl_abapgit_log_viewer=>show_log( ii_event->mi_gui_services->get_log( ) ).
         rs_handled-state = zcl_abapgit_gui=>c_event_state-no_more_act.
     ENDCASE.
 

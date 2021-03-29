@@ -86,7 +86,7 @@ CLASS ltcl_test IMPLEMENTATION.
       act = mi_cut->get_status( )
       exp = zif_abapgit_log=>c_status-error ).
 
-    mi_cut->clear( ).
+    CREATE OBJECT mi_cut TYPE zcl_abapgit_log.
 
     cl_abap_unit_assert=>assert_equals(
       act = mi_cut->get_status( )

@@ -73,7 +73,6 @@ INTERFACE zif_abapgit_log
     IMPORTING
       !ix_exc  TYPE REF TO cx_root
       !is_item TYPE zif_abapgit_definitions=>ty_item OPTIONAL .
-  METHODS clear .
   METHODS count
     RETURNING
       VALUE(rv_count) TYPE i .

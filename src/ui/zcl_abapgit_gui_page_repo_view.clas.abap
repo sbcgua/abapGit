@@ -181,7 +181,7 @@ ENDCLASS.
 
 
 
-CLASS zcl_abapgit_gui_page_repo_view IMPLEMENTATION.
+CLASS ZCL_ABAPGIT_GUI_PAGE_REPO_VIEW IMPLEMENTATION.
 
 
   METHOD apply_order_by.
@@ -432,8 +432,9 @@ CLASS zcl_abapgit_gui_page_repo_view IMPLEMENTATION.
 
   METHOD build_main_toolbar.
 
-    DATA:
-      li_log TYPE REF TO zif_abapgit_log.
+    DATA li_log TYPE REF TO zif_abapgit_log.
+
+    li_log = gui_services( )->get_log( ).
 
     CREATE OBJECT ro_toolbar EXPORTING iv_id = 'toolbar-repo'.
 
@@ -453,10 +454,10 @@ CLASS zcl_abapgit_gui_page_repo_view IMPLEMENTATION.
                          iv_act = |{ zif_abapgit_definitions=>c_action-go_repo_diff }?key={ mv_key }|
                          iv_opt = zif_abapgit_html=>c_html_opt-strong ).
       ENDIF.
-      li_log = mo_repo->get_log( ).
-      IF li_log IS BOUND AND li_log->count( ) > 0.
-        ro_toolbar->add( iv_txt = 'Log'
-                         iv_act = |{ zif_abapgit_definitions=>c_action-repo_log }?key={ mv_key }| ).
+      IF li_log->count( ) > 0.
+        ro_toolbar->add(
+          iv_txt = 'Log'
+          iv_act = |{ zif_abapgit_definitions=>c_action-show_last_log }| ).
       ENDIF.
       ro_toolbar->add( iv_txt = 'Branch'
                        io_sub = io_tb_branch ).
@@ -477,10 +478,10 @@ CLASS zcl_abapgit_gui_page_repo_view IMPLEMENTATION.
       ro_toolbar->add( iv_txt = 'Export <sup>zip</sup>'
                        iv_act = |{ zif_abapgit_definitions=>c_action-zip_export }?key={ mv_key }|
                        iv_opt = zif_abapgit_html=>c_html_opt-strong ).
-      li_log = mo_repo->get_log( ).
-      IF li_log IS BOUND AND li_log->count( ) > 0.
-        ro_toolbar->add( iv_txt = 'Log'
-                         iv_act = |{ zif_abapgit_definitions=>c_action-repo_log }?key={ mv_key }| ).
+      IF li_log->count( ) > 0.
+        ro_toolbar->add(
+          iv_txt = 'Log'
+          iv_act = |{ zif_abapgit_definitions=>c_action-show_last_log }| ).
       ENDIF.
     ENDIF.
 
@@ -753,6 +754,7 @@ CLASS zcl_abapgit_gui_page_repo_view IMPLEMENTATION.
 
     gui_services( )->get_hotkeys_ctl( )->register_hotkeys( me ).
     gui_services( )->register_event_handler( me ).
+    li_log = gui_services( )->get_log( ).
 
     TRY.
         " Reinit, for the case of type change
@@ -781,9 +783,11 @@ CLASS zcl_abapgit_gui_page_repo_view IMPLEMENTATION.
           EXPORTING
             io_repo = mo_repo.
 
-        lt_repo_items = lo_browser->list( iv_path         = mv_cur_dir
-                                          iv_by_folders   = mv_show_folders
-                                          iv_changes_only = mv_changes_only ).
+        lt_repo_items = lo_browser->list(
+          ii_log          = li_log
+          iv_path         = mv_cur_dir
+          iv_by_folders   = mv_show_folders
+          iv_changes_only = mv_changes_only ).
 
         apply_order_by( CHANGING ct_repo_items = lt_repo_items ).
 
@@ -797,7 +801,6 @@ CLASS zcl_abapgit_gui_page_repo_view IMPLEMENTATION.
         ri_html->add( render_head_line( iv_lstate = lv_lstate
                                         iv_rstate = lv_rstate ) ).
 
-        li_log = lo_browser->get_log( ).
         IF mo_repo->is_offline( ) = abap_false AND li_log->count( ) > 0.
           ri_html->add( '<div class="log">' ).
           ri_html->add( zcl_abapgit_log_viewer=>to_html( li_log ) ). " shows eg. list of unsupported objects
@@ -1261,7 +1264,7 @@ CLASS zcl_abapgit_gui_page_repo_view IMPLEMENTATION.
     INSERT ls_hotkey_action INTO TABLE rt_hotkey_actions.
 
     ls_hotkey_action-description   = |Show log|.
-    ls_hotkey_action-action = zif_abapgit_definitions=>c_action-repo_log.
+    ls_hotkey_action-action = zif_abapgit_definitions=>c_action-show_last_log.
     ls_hotkey_action-hotkey = |l|.
     INSERT ls_hotkey_action INTO TABLE rt_hotkey_actions.
 

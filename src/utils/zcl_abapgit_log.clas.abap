@@ -172,11 +172,6 @@ CLASS ZCL_ABAPGIT_LOG IMPLEMENTATION.
   ENDMETHOD.
 
 
-  METHOD zif_abapgit_log~clear.
-    CLEAR mt_log.
-  ENDMETHOD.
-
-
   METHOD zif_abapgit_log~clone.
 
     DATA lo_log TYPE REF TO zcl_abapgit_log.

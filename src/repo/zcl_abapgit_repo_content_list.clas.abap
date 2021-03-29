@@ -5,46 +5,58 @@ CLASS zcl_abapgit_repo_content_list DEFINITION
 
   PUBLIC SECTION.
     METHODS constructor
-      IMPORTING io_repo TYPE REF TO zcl_abapgit_repo.
+      IMPORTING
+        io_repo TYPE REF TO zcl_abapgit_repo.
 
     METHODS list
-      IMPORTING iv_path              TYPE string
-                iv_by_folders        TYPE abap_bool
-                iv_changes_only      TYPE abap_bool
-      RETURNING VALUE(rt_repo_items) TYPE zif_abapgit_definitions=>ty_repo_item_tt
-      RAISING   zcx_abapgit_exception.
+      IMPORTING
+        iv_path              TYPE string
+        iv_by_folders        TYPE abap_bool
+        iv_changes_only      TYPE abap_bool
+        ii_log               TYPE REF TO zif_abapgit_log
+      RETURNING
+        VALUE(rt_repo_items) TYPE zif_abapgit_definitions=>ty_repo_item_tt
+      RAISING
+        zcx_abapgit_exception.
 
-    METHODS get_log
-      RETURNING VALUE(ri_log) TYPE REF TO zif_abapgit_log.
   PROTECTED SECTION.
   PRIVATE SECTION.
-    CONSTANTS: BEGIN OF c_sortkey,
-                 default    TYPE i VALUE 9999,
-                 parent_dir TYPE i VALUE 0,
-                 dir        TYPE i VALUE 1,
-                 orphan     TYPE i VALUE 2,
-                 changed    TYPE i VALUE 3,
-                 inactive   TYPE i VALUE 4,
-               END OF c_sortkey.
+    CONSTANTS:
+      BEGIN OF c_sortkey,
+        default    TYPE i VALUE 9999,
+        parent_dir TYPE i VALUE 0,
+        dir        TYPE i VALUE 1,
+        orphan     TYPE i VALUE 2,
+        changed    TYPE i VALUE 3,
+        inactive   TYPE i VALUE 4,
+      END OF c_sortkey.
 
-    DATA: mo_repo TYPE REF TO zcl_abapgit_repo,
-          mi_log  TYPE REF TO zif_abapgit_log.
+    DATA mo_repo TYPE REF TO zcl_abapgit_repo.
+    DATA mi_log  TYPE REF TO zif_abapgit_log.
 
     METHODS build_repo_items_local_only
-      RETURNING VALUE(rt_repo_items) TYPE zif_abapgit_definitions=>ty_repo_item_tt
-      RAISING   zcx_abapgit_exception.
+      RETURNING
+        VALUE(rt_repo_items) TYPE zif_abapgit_definitions=>ty_repo_item_tt
+      RAISING
+        zcx_abapgit_exception.
 
     METHODS build_repo_items_with_remote
-      RETURNING VALUE(rt_repo_items) TYPE zif_abapgit_definitions=>ty_repo_item_tt
-      RAISING   zcx_abapgit_exception.
+      RETURNING
+        VALUE(rt_repo_items) TYPE zif_abapgit_definitions=>ty_repo_item_tt
+      RAISING
+        zcx_abapgit_exception.
 
     METHODS build_folders
-      IMPORTING iv_cur_dir    TYPE string
-      CHANGING  ct_repo_items TYPE zif_abapgit_definitions=>ty_repo_item_tt
-      RAISING   zcx_abapgit_exception.
+      IMPORTING
+        iv_cur_dir    TYPE string
+      CHANGING
+        ct_repo_items TYPE zif_abapgit_definitions=>ty_repo_item_tt
+      RAISING
+        zcx_abapgit_exception.
 
     METHODS filter_changes
-      CHANGING ct_repo_items TYPE zif_abapgit_definitions=>ty_repo_item_tt.
+      CHANGING
+        ct_repo_items TYPE zif_abapgit_definitions=>ty_repo_item_tt.
 
     METHODS check_repo_size
       RAISING
@@ -130,7 +142,7 @@ CLASS ZCL_ABAPGIT_REPO_CONTENT_LIST IMPLEMENTATION.
       IF <ls_repo_item>-inactive = abap_true.
         <ls_repo_item>-sortkey = c_sortkey-inactive.
       ELSE.
-        <ls_repo_item>-sortkey  = c_sortkey-default.      " Default sort key
+        <ls_repo_item>-sortkey = c_sortkey-default.      " Default sort key
       ENDIF.
     ENDLOOP.
 
@@ -208,16 +220,15 @@ CLASS ZCL_ABAPGIT_REPO_CONTENT_LIST IMPLEMENTATION.
         WITH KEY path = zif_abapgit_definitions=>c_root_dir
         filename = zif_abapgit_definitions=>c_dot_abapgit.
       IF sy-subrc <> 0.
-        mi_log->add_warning( |Cannot find .abapgit.xml - Is this an abapGit repository?| ).
       ENDIF.
     ENDIF.
+        mi_log->add_warning( |Cannot find .abapgit.xml - Is this an abapGit repository?| ).
 
   ENDMETHOD.
 
 
   METHOD constructor.
     mo_repo = io_repo.
-    CREATE OBJECT mi_log TYPE zcl_abapgit_log.
   ENDMETHOD.
 
 
@@ -232,34 +243,9 @@ CLASS ZCL_ABAPGIT_REPO_CONTENT_LIST IMPLEMENTATION.
   ENDMETHOD.
 
 
-  METHOD get_log.
-    DATA li_repo_log TYPE REF TO zif_abapgit_log.
-    DATA lt_repo_msg TYPE zif_abapgit_log=>ty_log_outs.
-    DATA lr_repo_msg TYPE REF TO zif_abapgit_log=>ty_log_out.
-
-    ri_log = mi_log.
-
-    "add warning and error messages from repo log
-    li_repo_log = mo_repo->get_log( ).
-    IF li_repo_log IS BOUND.
-      lt_repo_msg = li_repo_log->get_messages( ).
-      LOOP AT lt_repo_msg REFERENCE INTO lr_repo_msg WHERE type CA 'EW'.
-        CASE lr_repo_msg->type.
-          WHEN 'E'.
-            ri_log->add_error( lr_repo_msg->text ).
-          WHEN 'W'.
-            ri_log->add_warning( lr_repo_msg->text ).
-          WHEN OTHERS.
-            CONTINUE.
-        ENDCASE.
-      ENDLOOP.
-    ENDIF.
-  ENDMETHOD.
-
-
   METHOD list.
 
-    mi_log->clear( ).
+    mi_log = ii_log.
 
     IF mo_repo->has_remote_source( ) = abap_true.
       rt_repo_items = build_repo_items_with_remote( ).

@@ -112,6 +112,7 @@ CLASS zcl_abapgit_services_repo IMPLEMENTATION.
           lt_requirements TYPE zif_abapgit_dot_abapgit=>ty_requirement_tt,
           lt_dependencies TYPE zif_abapgit_apack_definitions=>ty_dependencies.
 
+    DATA li_log TYPE REF TO zif_abapgit_log.
 
 * find troublesome objects
     ls_checks = io_repo->deserialize_checks( ).
@@ -142,8 +143,10 @@ CLASS zcl_abapgit_services_repo IMPLEMENTATION.
     ENDTRY.
 
 * and pass decisions to deserialize
+    CREATE OBJECT li_log TYPE zcl_abapgit_log. " TODO refactor
+    li_log->set_title( 'Pull Log' ).
     io_repo->deserialize( is_checks = ls_checks
-                          ii_log    = io_repo->create_new_log( 'Pull Log' ) ).
+                          ii_log    = li_log ).
 
   ENDMETHOD.
 
