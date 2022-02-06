@@ -637,6 +637,14 @@ CLASS ZCL_ABAPGIT_REPO IMPLEMENTATION.
 
     ENDLOOP.
     set( it_checksums = lt_checksums ).
+
+
+    DATA li_checksums TYPE REF TO zif_abapgit_repo_checksums.
+    CREATE OBJECT li_checksums TYPE zcl_abapgit_repo_checksums
+      EXPORTING
+        iv_repo_key = ms_data-key.
+    li_checksums->rebuild( ).
+
     reset_status( ).
 
   ENDMETHOD.
