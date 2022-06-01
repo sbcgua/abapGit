@@ -31,6 +31,6 @@
     "@abaplint/database-sqlite": "^2.0.11",
     "abapmerge": "^0.14.3",
     "c8": "^7.11.2",
-    "eslint": "^8.14.0"
+    "eslint": "^8.16.0"
   }
 }
