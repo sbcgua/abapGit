@@ -855,6 +855,10 @@ CLASS ltcl_calculate_status IMPLEMENTATION.
       iv_filename = '$$zdoma1.doma.xml'
       iv_sha1     = 'D1' ).
 
+    mo_helper->add_state(
+      iv_filename = '$$zdoma1.doma.xml'
+      iv_sha1     = 'D1' ). " same checksum
+
     mo_result = mo_helper->run( ).
 
     mo_result->assert_lines( 1 ).
