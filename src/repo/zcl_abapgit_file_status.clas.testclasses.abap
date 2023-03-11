@@ -855,6 +855,10 @@ CLASS ltcl_calculate_status IMPLEMENTATION.
       iv_filename = '$$zdoma1.doma.xml'
       iv_sha1     = 'D1' ).
 
+    mo_helper->add_state(
+      iv_filename = '$$zdomaX.doma.xml'
+      iv_sha1     = 'XXX' ). " checksums exist and are not replaced with local state, but the doma1 object is new
+
     mo_result = mo_helper->run( ).
 
     mo_result->assert_lines( 1 ).
@@ -1313,7 +1317,7 @@ CLASS ltcl_calculate_status IMPLEMENTATION.
     " it should appear as deleted remotely
     cl_abap_unit_assert=>assert_equals(
       act = mo_result->get_line( 1 )-lstate
-      exp = zif_abapgit_definitions=>c_state-added ).
+      exp = zif_abapgit_definitions=>c_state-modified ).
 
   ENDMETHOD.
 

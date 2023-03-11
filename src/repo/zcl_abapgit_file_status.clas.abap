@@ -21,8 +21,9 @@ CLASS zcl_abapgit_file_status DEFINITION
 
   PROTECTED SECTION.
   PRIVATE SECTION.
-    DATA mv_root_package TYPE devclass.
-    DATA mo_dot          TYPE REF TO zcl_abapgit_dot_abapgit.
+    DATA mv_root_package     TYPE devclass.
+    DATA mo_dot              TYPE REF TO zcl_abapgit_dot_abapgit.
+    DATA mv_no_remote_source TYPE abap_bool.
 
     METHODS calculate_status
       IMPORTING
@@ -70,6 +71,7 @@ CLASS zcl_abapgit_file_status DEFINITION
     CLASS-METHODS build_new_local
       IMPORTING
         !is_local        TYPE zif_abapgit_definitions=>ty_file_item
+        !it_state_idx    TYPE zif_abapgit_git_definitions=>ty_file_signatures_ts
       RETURNING
         VALUE(rs_result) TYPE zif_abapgit_definitions=>ty_result .
     METHODS build_new_remote
@@ -156,6 +158,8 @@ CLASS ZCL_ABAPGIT_FILE_STATUS IMPLEMENTATION.
 
   METHOD build_new_local.
 
+    FIELD-SYMBOLS <ls_state> LIKE LINE OF it_state_idx.
+
     " Item
     rs_result-obj_type  = is_local-item-obj_type.
     rs_result-obj_name  = is_local-item-obj_name.
@@ -166,9 +170,22 @@ CLASS ZCL_ABAPGIT_FILE_STATUS IMPLEMENTATION.
     rs_result-path     = is_local-file-path.
     rs_result-filename = is_local-file-filename.
 
-    " Match
-    rs_result-match    = abap_false.
-    rs_result-lstate   = zif_abapgit_definitions=>c_state-added.
+    " State
+    READ TABLE it_state_idx ASSIGNING <ls_state>
+      WITH KEY
+        path     = is_local-file-path
+        filename = is_local-file-filename.
+
+    IF sy-subrc <> 0.
+      " No state found -> this file was never syncronized -> new one
+      rs_result-lstate = zif_abapgit_definitions=>c_state-added.
+    ELSEIF is_local-file-sha1 = <ls_state>-sha1.
+      " state found and it's the same - unchanged local file
+      rs_result-lstate = zif_abapgit_definitions=>c_state-unchanged.
+    ELSE.
+      " state found and it differs - moddified locally
+      rs_result-lstate = zif_abapgit_definitions=>c_state-modified.
+    ENDIF.
 
   ENDMETHOD.
 
@@ -441,30 +458,46 @@ CLASS ZCL_ABAPGIT_FILE_STATUS IMPLEMENTATION.
           it_state  = it_state_idx ).
         CLEAR <ls_remote>-sha1. " Mark as processed
       ELSE. " Only local exists
-        <ls_result> = build_new_local( <ls_local> ).
-        " Check if same file exists in different location
-        READ TABLE ct_remote ASSIGNING <ls_remote>
-          WITH KEY file
-          COMPONENTS filename = <ls_local>-file-filename.
-        IF sy-subrc = 0 AND <ls_local>-file-sha1 = <ls_remote>-sha1.
-          " If yes, then it was probably moved
-          <ls_result>-packmove = abap_true.
-        ELSEIF sy-subrc = 4.
-          " Check if file existed before and was deleted remotely
-          READ TABLE it_state_idx ASSIGNING <ls_state>
-            WITH KEY
-              path     = <ls_local>-file-path
-              filename = <ls_local>-file-filename.
-          IF sy-subrc = 0.
-            IF <ls_local>-file-sha1 = <ls_state>-sha1.
-              <ls_result>-lstate = zif_abapgit_definitions=>c_state-unchanged.
-            ELSE.
-              <ls_result>-lstate = zif_abapgit_definitions=>c_state-modified.
+        <ls_result> = build_new_local(
+          is_local     = <ls_local>
+          it_state_idx = it_state_idx ).
+
+        IF mv_no_remote_source = abap_true.
+          <ls_result>-rstate = zif_abapgit_definitions=>c_state-unchanged.
+        ELSE.
+
+          " Check if same file exists in different location
+          READ TABLE ct_remote ASSIGNING <ls_remote>
+            WITH KEY file
+            COMPONENTS filename = <ls_local>-file-filename.
+          IF sy-subrc = 0 AND <ls_local>-file-sha1 = <ls_remote>-sha1.
+            " If yes, then it was probably moved
+            <ls_result>-packmove = abap_true.
+          ELSEIF sy-subrc = 4.
+            " Check if file existed before and was deleted remotely
+            READ TABLE it_state_idx ASSIGNING <ls_state>
+              WITH KEY
+                path     = <ls_local>-file-path
+                filename = <ls_local>-file-filename.
+            IF sy-subrc = 0.
+              IF <ls_local>-file-sha1 = <ls_state>-sha1.
+                <ls_result>-lstate = zif_abapgit_definitions=>c_state-unchanged.
+              ELSE.
+                <ls_result>-lstate = zif_abapgit_definitions=>c_state-modified.
+              ENDIF.
+              <ls_result>-rstate = zif_abapgit_definitions=>c_state-deleted. " ??
             ENDIF.
-            <ls_result>-rstate = zif_abapgit_definitions=>c_state-deleted. " ??
           ENDIF.
+
         ENDIF.
+
+        <ls_result>-match = boolc(
+          <ls_result>-lstate = zif_abapgit_definitions=>c_state-unchanged
+          AND <ls_result>-rstate = zif_abapgit_definitions=>c_state-unchanged
+          AND <ls_result>-packmove = abap_false ).
+
       ENDIF.
+
     ENDLOOP.
 
   ENDMETHOD.
@@ -530,7 +563,16 @@ CLASS ZCL_ABAPGIT_FILE_STATUS IMPLEMENTATION.
       io_repo->find_remote_dot_abapgit( ).
     ENDIF.
 
-    lt_remote = io_repo->get_files_remote( iv_ignore_files = abap_true ).
+    CREATE OBJECT lo_instance
+      EXPORTING
+        iv_root_package = io_repo->get_package( )
+        io_dot          = io_repo->get_dot_abapgit( ).
+
+    IF io_repo->has_remote_source( ) = abap_true.
+      lt_remote = io_repo->get_files_remote( iv_ignore_files = abap_true ).
+    ELSE.
+      lo_instance->mv_no_remote_source = abap_true.
+    ENDIF.
 
     li_exit = zcl_abapgit_exit=>get_instance( ).
     li_exit->pre_calculate_repo_status(
@@ -539,11 +581,6 @@ CLASS ZCL_ABAPGIT_FILE_STATUS IMPLEMENTATION.
       CHANGING
         ct_local  = lt_local
         ct_remote = lt_remote ).
-
-    CREATE OBJECT lo_instance
-      EXPORTING
-        iv_root_package = io_repo->get_package( )
-        io_dot          = io_repo->get_dot_abapgit( ).
 
     rt_results = lo_instance->calculate_status(
       it_local     = lt_local
