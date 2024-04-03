@@ -174,7 +174,7 @@ ENDCLASS.
 
 
 
-CLASS zcl_abapgit_gui_page_repo_over IMPLEMENTATION.
+CLASS ZCL_ABAPGIT_GUI_PAGE_REPO_OVER IMPLEMENTATION.
 
 
   METHOD apply_filter.
@@ -877,6 +877,10 @@ CLASS zcl_abapgit_gui_page_repo_over IMPLEMENTATION.
     lv_key = ii_event->query( )->get( 'KEY' ).
 
     CASE ii_event->mv_action.
+      WHEN 'demopage'.
+        rs_handled-page  = zcl_ag_demo_page=>new( ).
+        rs_handled-state = zcl_abapgit_gui=>c_event_state-new_page.
+
       WHEN c_action-select.
 
         zcl_abapgit_persistence_user=>get_instance( )->set_repo_show( lv_key ).
@@ -1002,6 +1006,10 @@ CLASS zcl_abapgit_gui_page_repo_over IMPLEMENTATION.
   METHOD zif_abapgit_gui_menu_provider~get_menu.
 
     CREATE OBJECT ro_toolbar EXPORTING iv_id = 'toolbar-main'.
+
+    ro_toolbar->add(
+      iv_txt = 'demopage'
+      iv_act = 'demopage' ).
 
     ro_toolbar->add(
       iv_txt = zcl_abapgit_gui_buttons=>flow( )
